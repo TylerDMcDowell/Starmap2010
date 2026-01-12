@@ -1,0 +1,8 @@
+c:\users\tyler\documents\visual studio 2010\Projects\StarMap2010\WindowsFormsApplication4\bin\Debug\StarMap2010.exe
+c:\users\tyler\documents\visual studio 2010\Projects\StarMap2010\WindowsFormsApplication4\bin\Debug\StarMap2010.pdb
+c:\users\tyler\documents\visual studio 2010\Projects\StarMap2010\WindowsFormsApplication4\obj\x86\Debug\StarMap2010.MainForm.resources
+c:\users\tyler\documents\visual studio 2010\Projects\StarMap2010\WindowsFormsApplication4\obj\x86\Debug\StarMap2010.Properties.Resources.resources
+c:\users\tyler\documents\visual studio 2010\Projects\StarMap2010\WindowsFormsApplication4\obj\x86\Debug\StarMap2010.csproj.GenerateResource.Cache
+c:\users\tyler\documents\visual studio 2010\Projects\StarMap2010\WindowsFormsApplication4\obj\x86\Debug\StarMap2010.exe
+c:\users\tyler\documents\visual studio 2010\Projects\StarMap2010\WindowsFormsApplication4\obj\x86\Debug\StarMap2010.pdb
+C:\Users\tyler\Documents\Visual Studio 2010\Projects\StarMap2010\WindowsFormsApplication4\obj\x86\Debug\StarMap2010.csprojResolveAssemblyReference.cache

@@ -1,0 +1,34 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2013
+VisualStudioVersion = 12.0.40629.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StarMap2010", "WindowsFormsApplication4\StarMap2010.csproj", "{3AB488FA-28C4-4961-B177-1AFFD7E89942}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{07E4CAED-CB3C-4DB3-9C14-F8EB6BE4328A}"
+	ProjectSection(SolutionItems) = preProject
+		Class2.cs = Class2.cs
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{3AB488FA-28C4-4961-B177-1AFFD7E89942}.Debug|x64.ActiveCfg = Debug|x64
+		{3AB488FA-28C4-4961-B177-1AFFD7E89942}.Debug|x64.Build.0 = Debug|x64
+		{3AB488FA-28C4-4961-B177-1AFFD7E89942}.Debug|x64.Deploy.0 = Debug|x64
+		{3AB488FA-28C4-4961-B177-1AFFD7E89942}.Debug|x86.ActiveCfg = Debug|x86
+		{3AB488FA-28C4-4961-B177-1AFFD7E89942}.Debug|x86.Build.0 = Debug|x86
+		{3AB488FA-28C4-4961-B177-1AFFD7E89942}.Release|x64.ActiveCfg = Release|x64
+		{3AB488FA-28C4-4961-B177-1AFFD7E89942}.Release|x64.Build.0 = Release|x64
+		{3AB488FA-28C4-4961-B177-1AFFD7E89942}.Release|x86.ActiveCfg = Release|x86
+		{3AB488FA-28C4-4961-B177-1AFFD7E89942}.Release|x86.Build.0 = Release|x86
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
