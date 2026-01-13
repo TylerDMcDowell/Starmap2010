@@ -4,7 +4,13 @@
 //
 // Large modal viewer/editor shell.
 // View mode shows read-only summary + loaded DB tables.
-// Edit mode still stubbed (Save disabled) until persistence is wired.
+// Edit mode still stubbed (Save does not persist yet).
+//
+// Locked rules honored:
+// - No schema changes
+// - radial_order is sorting only; never shown to users
+// - Orbit text is derived (never stored)
+// - Sidebar is minimal elsewhere; this modal shows the details
 // ============================================================
 
 using System;
@@ -37,7 +43,6 @@ namespace StarMap2010.Ui
         private TabControl _tabs;
 
         private TextBox _txtSummary;
-
         private DataGridView _gridDetails;
         private DataGridView _gridEnv;
         private DataGridView _gridTerraform;
@@ -123,9 +128,9 @@ namespace StarMap2010.Ui
             tabTerraform.Controls.Add(_gridTerraform);
             _tabs.TabPages.Add(tabTerraform);
 
-            // ---- Attributes tab ----
+            // ---- Attributes tab ---- (friendly 2-column)
             var tabAttrs = new TabPage("Attributes");
-            _gridAttrs = MakeGrid();
+            _gridAttrs = MakeGridAttrs();
             tabAttrs.Controls.Add(_gridAttrs);
             _tabs.TabPages.Add(tabAttrs);
 
@@ -138,13 +143,36 @@ namespace StarMap2010.Ui
                 Padding = new Padding(0, 8, 0, 0)
             };
 
-            _btnCancel = new Button { Text = "Cancel", Width = 100, Height = 30, DialogResult = DialogResult.Cancel };
-            _btnPrimary = new Button { Text = "Save", Width = 100, Height = 30, Enabled = false };
+            _btnCancel = new Button
+            {
+                Text = "Cancel",
+                Width = 100,
+                Height = 30,
+                DialogResult = DialogResult.Cancel
+            };
+
+            _btnPrimary = new Button
+            {
+                Text = "Save",
+                Width = 100,
+                Height = 30
+            };
 
             _btnPrimary.Click += (s, e) =>
             {
-                DialogResult = DialogResult.OK;
-                Close();
+                if (_mode == ObjectEditorMode.View)
+                {
+                    DialogResult = DialogResult.OK;
+                    Close();
+                    return;
+                }
+
+                // Edit mode: stub (no persistence yet)
+                MessageBox.Show(
+                    "Save is not implemented yet.\r\n\r\nThis window is read-only for now; Edit mode is a stub until persistence is wired.",
+                    "Not Implemented",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
             };
 
             buttons.Controls.Add(_btnCancel);
@@ -158,7 +186,7 @@ namespace StarMap2010.Ui
 
         private static DataGridView MakeGrid()
         {
-            var g = new DataGridView
+            return new DataGridView
             {
                 Dock = DockStyle.Fill,
                 ReadOnly = true,
@@ -171,13 +199,20 @@ namespace StarMap2010.Ui
                 BackgroundColor = Color.White,
                 BorderStyle = BorderStyle.FixedSingle
             };
-            return g;
         }
 
+        // 2-column "Field / Value" presentation
         private static DataGridView MakeGridProps()
         {
             var g = MakeGrid();
-            g.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            g.RowHeadersVisible = false;
+            return g;
+        }
+
+        // 2-column "Attribute / Value" presentation
+        private static DataGridView MakeGridAttrs()
+        {
+            var g = MakeGrid();
             g.RowHeadersVisible = false;
             return g;
         }
@@ -187,7 +222,7 @@ namespace StarMap2010.Ui
             string name = (_obj != null && !string.IsNullOrWhiteSpace(_obj.DisplayName)) ? _obj.DisplayName.Trim() : "(unnamed)";
             string kind = (_obj != null && !string.IsNullOrWhiteSpace(_obj.ObjectKind)) ? _obj.ObjectKind.Trim() : "-";
 
-            _hdr.Text = name + "  [" + kind + "]";
+            _hdr.Text = name + " [" + kind + "]";
 
             if (_obj == null)
             {
@@ -201,10 +236,10 @@ namespace StarMap2010.Ui
             string orbitPhrase = DeriveOrbitPhrase(_all, _obj);
 
             _txtSummary.Text =
-                "Name:          " + name + "\r\n" +
-                "Kind:          " + FriendlyKind(kind) + "\r\n" +
-                "Orbit:         " + orbitPhrase + "\r\n" +
-                "Notes:         " + FirstLine(_obj.Notes) + "\r\n" +
+                "Name: " + name + "\r\n" +
+                "Kind: " + FriendlyKind(kind) + "\r\n" +
+                "Orbit: " + orbitPhrase + "\r\n" +
+                "Notes: " + FirstLine(_obj.Notes) + "\r\n" +
                 "\r\n" +
                 "Tip: Double-click or right-click → View… from the tree.\r\n" +
                 "Tabs: Details / Environment / Terraform / Attributes are DB-backed.";
@@ -212,7 +247,8 @@ namespace StarMap2010.Ui
 
         private void LoadAndBindTables()
         {
-            if (_obj == null) return;
+            if (_obj == null)
+                return;
 
             if (string.IsNullOrWhiteSpace(_dbPath))
             {
@@ -246,26 +282,25 @@ namespace StarMap2010.Ui
                 var dtTer = QueryTable("SELECT * FROM terraform_constraints WHERE object_id = @id;", _obj.ObjectId);
                 BindOneRowAsFriendlyProperties(_gridTerraform, dtTer);
 
-                // 4) Attributes (join to dictionary, then collapse to Name/Value/Units/Notes)
-                var dtAttrsRaw = QueryTable(@"
-SELECT
-    oa.attr_key                               AS attr_key,
-    COALESCE(ad.display_name, oa.attr_key)    AS name,
-    ad.units                                  AS units,
-    ad.value_kind                             AS value_kind,
-    oa.value_text                             AS value_text,
-    oa.value_num                              AS value_num,
-    oa.value_int                              AS value_int,
-    oa.value_bool                             AS value_bool,
-    oa.notes                                  AS notes
-FROM object_attributes oa
-LEFT JOIN attribute_dictionary ad
-    ON ad.attr_key = oa.attr_key
-WHERE oa.object_id = @id
-ORDER BY name COLLATE NOCASE;
-", _obj.ObjectId);
+                // 4) Attributes (join to dictionary for display)
+                var dtAttrsRaw = QueryTable(
+                    @"SELECT
+                        oa.attr_key AS attr_key,
+                        COALESCE(ad.display_name, oa.attr_key) AS name,
+                        ad.units AS units,
+                        ad.value_kind AS value_kind,
+                        oa.value_text AS value_text,
+                        oa.value_num AS value_num,
+                        oa.value_int AS value_int,
+                        oa.value_bool AS value_bool,
+                        oa.notes AS notes
+                      FROM object_attributes oa
+                      LEFT JOIN attribute_dictionary ad ON ad.attr_key = oa.attr_key
+                      WHERE oa.object_id = @id
+                      ORDER BY name COLLATE NOCASE;",
+                    _obj.ObjectId);
 
-                BindAttributesFriendly(dtAttrsRaw);
+                BindAttributesCollapsed(dtAttrsRaw);
             }
             catch (Exception ex)
             {
@@ -296,7 +331,8 @@ ORDER BY name COLLATE NOCASE;
 
         private static void BindOneRowAsFriendlyProperties(DataGridView grid, DataTable dt)
         {
-            if (grid == null) return;
+            if (grid == null)
+                return;
 
             if (dt == null || dt.Rows.Count == 0)
             {
@@ -324,15 +360,37 @@ ORDER BY name COLLATE NOCASE;
 
                 string col = c.ColumnName ?? "";
 
-                // Hide noise / technical columns
-                if (EqualsIgnore(col, "object_id")) continue;
-                if (EndsWithIgnore(col, "_utc")) continue;
+                // Hide noisy / technical columns
+                if (ShouldHideColumn(col))
+                    continue;
 
                 object v = r[i];
-                string s = (v == null || v == DBNull.Value) ? "-" : Convert.ToString(v, CultureInfo.InvariantCulture);
+                if (v == null || v == DBNull.Value)
+                    continue;
 
-                props.Rows.Add(HumanizeField(col), s);
+                string s = Convert.ToString(v, CultureInfo.InvariantCulture);
+                if (string.IsNullOrWhiteSpace(s))
+                    continue;
+
+
+
+
+                if (EqualsIgnore(col, "tidally_locked"))
+                {
+                    int b;
+                    if (int.TryParse(s, out b))
+                        s = (b != 0) ? "Yes" : "No";
+                }
+
+                string label = HumanizeField(col);
+                if (EqualsIgnore(col, "planet_class") || EqualsIgnore(col, "moon_class"))
+                    label = "Class";
+
+                props.Rows.Add(label, s.Trim());
             }
+
+            if (props.Rows.Count == 0)
+                props.Rows.Add("Info", "No displayable fields.");
 
             grid.DataSource = props;
 
@@ -344,7 +402,7 @@ ORDER BY name COLLATE NOCASE;
             }
         }
 
-        private void BindAttributesFriendly(DataTable dtAttrsRaw)
+        private void BindAttributesCollapsed(DataTable dtAttrsRaw)
         {
             if (dtAttrsRaw == null || dtAttrsRaw.Rows.Count == 0)
             {
@@ -353,10 +411,8 @@ ORDER BY name COLLATE NOCASE;
             }
 
             var dt = new DataTable();
-            dt.Columns.Add("Name", typeof(string));
+            dt.Columns.Add("Attribute", typeof(string));
             dt.Columns.Add("Value", typeof(string));
-            dt.Columns.Add("Units", typeof(string));
-            dt.Columns.Add("Notes", typeof(string));
 
             for (int i = 0; i < dtAttrsRaw.Rows.Count; i++)
             {
@@ -374,15 +430,41 @@ ORDER BY name COLLATE NOCASE;
                     Convert.ToString(r["value_kind"])
                 );
 
-                dt.Rows.Add(
-                    string.IsNullOrWhiteSpace(name) ? "(unnamed)" : name,
-                    string.IsNullOrWhiteSpace(value) ? "-" : value,
-                    string.IsNullOrWhiteSpace(units) ? "" : units,
-                    string.IsNullOrWhiteSpace(notes) ? "" : notes
-                );
+                if (string.IsNullOrWhiteSpace(name))
+                    name = "(unnamed)";
+
+                // If no usable value, skip (reduces noise)
+                if (string.IsNullOrWhiteSpace(value) || value == "-")
+                    continue;
+
+                string collapsed = CollapseValueUnitsNotes(value, units, notes);
+                dt.Rows.Add(name.Trim(), collapsed);
             }
 
+            if (dt.Rows.Count == 0)
+                dt.Rows.Add("Info", "No displayable attributes.");
+
             _gridAttrs.DataSource = dt;
+
+            if (_gridAttrs.Columns.Count >= 2)
+            {
+                _gridAttrs.Columns[0].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
+                _gridAttrs.Columns[1].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
+            }
+        }
+
+        private static string CollapseValueUnitsNotes(string value, string units, string notes)
+        {
+            var sb = new StringBuilder();
+            sb.Append(value.Trim());
+
+            if (!string.IsNullOrWhiteSpace(units))
+                sb.Append(" ").Append(units.Trim());
+
+            if (!string.IsNullOrWhiteSpace(notes))
+                sb.Append(" — ").Append(notes.Trim());
+
+            return sb.ToString();
         }
 
         private static string CollapseAttrValue(object vText, object vNum, object vInt, object vBool, string valueKind)
@@ -390,7 +472,8 @@ ORDER BY name COLLATE NOCASE;
             if (vText != null && vText != DBNull.Value)
             {
                 string s = Convert.ToString(vText);
-                if (!string.IsNullOrWhiteSpace(s)) return s.Trim();
+                if (!string.IsNullOrWhiteSpace(s))
+                    return s.Trim();
             }
 
             if (vNum != null && vNum != DBNull.Value)
@@ -398,6 +481,7 @@ ORDER BY name COLLATE NOCASE;
                 double d;
                 if (double.TryParse(Convert.ToString(vNum, CultureInfo.InvariantCulture), NumberStyles.Any, CultureInfo.InvariantCulture, out d))
                     return d.ToString("0.###", CultureInfo.InvariantCulture);
+
                 return Convert.ToString(vNum, CultureInfo.InvariantCulture);
             }
 
@@ -409,6 +493,7 @@ ORDER BY name COLLATE NOCASE;
                 int b;
                 if (int.TryParse(Convert.ToString(vBool, CultureInfo.InvariantCulture), out b))
                     return (b != 0) ? "Yes" : "No";
+
                 return Convert.ToString(vBool, CultureInfo.InvariantCulture);
             }
 
@@ -419,6 +504,33 @@ ORDER BY name COLLATE NOCASE;
             return "-";
         }
 
+        private static bool ShouldHideColumn(string col)
+        {
+            if (string.IsNullOrWhiteSpace(col))
+                return true;
+
+            if (EqualsIgnore(col, "created_utc") || EqualsIgnore(col, "updated_utc"))
+                return true;
+
+            // Hard hides
+            if (EqualsIgnore(col, "object_id"))
+                return true;
+
+            // Timestamps
+            if (EndsWithIgnore(col, "_utc"))
+                return true;
+
+            // Common internal IDs (keep this conservative; adjust if needed)
+            if (EqualsIgnore(col, "created_by") || EqualsIgnore(col, "updated_by"))
+                return true;
+
+            // Sorting-only / internal
+            if (EqualsIgnore(col, "radial_order"))
+                return true;
+
+            return false;
+        }
+
         private static void BindPropsEmpty(DataGridView grid, string msg)
         {
             if (grid == null) return;
@@ -427,6 +539,7 @@ ORDER BY name COLLATE NOCASE;
             dt.Columns.Add("Field", typeof(string));
             dt.Columns.Add("Value", typeof(string));
             dt.Rows.Add("Info", msg ?? "");
+
             grid.DataSource = dt;
 
             if (grid.Columns.Count >= 2)
@@ -439,12 +552,12 @@ ORDER BY name COLLATE NOCASE;
         private void BindAttrsEmpty(string msg)
         {
             if (_gridAttrs == null) return;
+
             var dt = new DataTable();
-            dt.Columns.Add("Name", typeof(string));
+            dt.Columns.Add("Attribute", typeof(string));
             dt.Columns.Add("Value", typeof(string));
-            dt.Columns.Add("Units", typeof(string));
-            dt.Columns.Add("Notes", typeof(string));
-            dt.Rows.Add("Info", msg ?? "", "", "");
+            dt.Rows.Add("Info", msg ?? "");
+
             _gridAttrs.DataSource = dt;
         }
 
@@ -480,7 +593,7 @@ ORDER BY name COLLATE NOCASE;
                 if (_btnPrimary != null)
                 {
                     _btnPrimary.Text = "Save";
-                    _btnPrimary.Enabled = false; // enable once we add fields + dirty tracking
+                    _btnPrimary.Enabled = true; // enabled, but stubbed
                     _btnPrimary.DialogResult = DialogResult.None;
                 }
 
@@ -500,11 +613,17 @@ ORDER BY name COLLATE NOCASE;
 
         private static string FirstLine(string s)
         {
-            if (string.IsNullOrWhiteSpace(s)) return "-";
+            if (string.IsNullOrWhiteSpace(s))
+                return "-";
+
             s = s.Trim();
             int ix = s.IndexOf('\n');
-            if (ix >= 0) s = s.Substring(0, ix);
-            if (s.Length > 120) s = s.Substring(0, 120) + "…";
+            if (ix >= 0)
+                s = s.Substring(0, ix);
+
+            if (s.Length > 120)
+                s = s.Substring(0, 120) + "…";
+
             return s;
         }
 
@@ -535,20 +654,45 @@ ORDER BY name COLLATE NOCASE;
 
         private static string HumanizeField(string snake)
         {
-            if (string.IsNullOrWhiteSpace(snake)) return "-";
+            if (string.IsNullOrWhiteSpace(snake))
+                return "-";
 
-            // small unit polish
+            // small unit polish:
             // radius_km -> Radius (km)
             // semi_major_axis_au -> Semi major axis (AU)
             string s = snake.Trim();
-
             string unit = null;
-            if (EndsWithIgnore(s, "_km")) { unit = "km"; s = s.Substring(0, s.Length - 3); }
-            else if (EndsWithIgnore(s, "_au")) { unit = "AU"; s = s.Substring(0, s.Length - 3); }
-            else if (EndsWithIgnore(s, "_atm")) { unit = "atm"; s = s.Substring(0, s.Length - 4); }
-            else if (EndsWithIgnore(s, "_c")) { unit = "°C"; s = s.Substring(0, s.Length - 2); }
-            else if (EndsWithIgnore(s, "_pct")) { unit = "%"; s = s.Substring(0, s.Length - 4); }
-            else if (EndsWithIgnore(s, "_deg")) { unit = "°"; s = s.Substring(0, s.Length - 4); }
+
+            if (EndsWithIgnore(s, "_km"))
+            {
+                unit = "km";
+                s = s.Substring(0, s.Length - 3);
+            }
+            else if (EndsWithIgnore(s, "_au"))
+            {
+                unit = "AU";
+                s = s.Substring(0, s.Length - 3);
+            }
+            else if (EndsWithIgnore(s, "_atm"))
+            {
+                unit = "atm";
+                s = s.Substring(0, s.Length - 4);
+            }
+            else if (EndsWithIgnore(s, "_c"))
+            {
+                unit = "°C";
+                s = s.Substring(0, s.Length - 2);
+            }
+            else if (EndsWithIgnore(s, "_pct"))
+            {
+                unit = "%";
+                s = s.Substring(0, s.Length - 4);
+            }
+            else if (EndsWithIgnore(s, "_deg"))
+            {
+                unit = "°";
+                s = s.Substring(0, s.Length - 4);
+            }
 
             s = s.Replace("_", " ");
             s = TitleCaseWords(s);
@@ -566,7 +710,9 @@ ORDER BY name COLLATE NOCASE;
 
         private static string TitleCaseWords(string s)
         {
-            if (string.IsNullOrWhiteSpace(s)) return s;
+            if (string.IsNullOrWhiteSpace(s))
+                return s;
+
             var ti = CultureInfo.InvariantCulture.TextInfo;
             return ti.ToTitleCase(s.ToLowerInvariant());
         }
@@ -588,7 +734,6 @@ ORDER BY name COLLATE NOCASE;
             if (obj == null) return "-";
 
             string kind = (obj.ObjectKind ?? "").Trim().ToLowerInvariant();
-
             if (kind == "planet") return "Planetary orbit (position derived from order)";
             if (kind == "moon") return "Satellite orbit (position derived from order)";
             if (kind == "dwarf_planet") return "Dwarf-planet orbit (position derived from order)";
@@ -597,21 +742,21 @@ ORDER BY name COLLATE NOCASE;
             if (kind == "oort_cloud" || kind == "comet_cloud") return "Outer cloud region";
             if (kind == "installation" || kind == "station") return "Artificial orbit (position derived from order)";
             if (kind == "ring_system") return "Ring region";
+
             return "Orbit position derived from order";
         }
 
         private static string DeriveOrbitPhrase(List<SystemObjectInfo> all, SystemObjectInfo obj)
         {
             if (obj == null) return "-";
-            if (all == null || all.Count == 0)
-                return DeriveOrbitPhrase_NoContext(obj);
+            if (all == null || all.Count == 0) return DeriveOrbitPhrase_NoContext(obj);
 
             string kind = (obj.ObjectKind ?? "").Trim().ToLowerInvariant();
-
             string hostId = FirstNonEmpty(obj.OrbitHostObjectId, obj.ParentObjectId);
             SystemObjectInfo host = FindById(all, hostId);
 
             var orbiters = new List<SystemObjectInfo>();
+
             for (int i = 0; i < all.Count; i++)
             {
                 var o = all[i];
@@ -638,12 +783,12 @@ ORDER BY name COLLATE NOCASE;
             if (kind == "planet")
             {
                 int planetIndex = 0;
+
                 for (int i = 0; i < orbiters.Count; i++)
                 {
                     var o = orbiters[i];
                     if (o == null) continue;
-                    if (!string.Equals((o.ObjectKind ?? "").Trim(), "planet", StringComparison.OrdinalIgnoreCase))
-                        continue;
+                    if (!string.Equals((o.ObjectKind ?? "").Trim(), "planet", StringComparison.OrdinalIgnoreCase)) continue;
 
                     planetIndex++;
 
@@ -660,12 +805,12 @@ ORDER BY name COLLATE NOCASE;
             if (kind == "moon")
             {
                 int moonIndex = 0;
+
                 for (int i = 0; i < orbiters.Count; i++)
                 {
                     var o = orbiters[i];
                     if (o == null) continue;
-                    if (!string.Equals((o.ObjectKind ?? "").Trim(), "moon", StringComparison.OrdinalIgnoreCase))
-                        continue;
+                    if (!string.Equals((o.ObjectKind ?? "").Trim(), "moon", StringComparison.OrdinalIgnoreCase)) continue;
 
                     moonIndex++;
 
@@ -685,14 +830,9 @@ ORDER BY name COLLATE NOCASE;
                 var inner = FindNearestInnerNamed(orbiters, idx);
                 var outer = FindNearestOuterNamed(orbiters, idx);
 
-                if (inner != null && outer != null)
-                    return "Between " + inner.DisplayName.Trim() + " and " + outer.DisplayName.Trim();
-
-                if (inner != null)
-                    return "Outside " + inner.DisplayName.Trim();
-
-                if (outer != null)
-                    return "Inside " + outer.DisplayName.Trim();
+                if (inner != null && outer != null) return "Between " + inner.DisplayName.Trim() + " and " + outer.DisplayName.Trim();
+                if (inner != null) return "Outside " + inner.DisplayName.Trim();
+                if (outer != null) return "Inside " + outer.DisplayName.Trim();
             }
 
             return "Orbit position derived from order";
@@ -703,8 +843,7 @@ ORDER BY name COLLATE NOCASE;
             kind = (kind ?? "").Trim().ToLowerInvariant();
             return kind == "planet" || kind == "moon" || kind == "dwarf_planet" ||
                    kind == "belt" || kind == "asteroid_belt" || kind == "kuiper_belt" ||
-                   kind == "oort_cloud" || kind == "comet_cloud" ||
-                   kind == "ring_system" ||
+                   kind == "oort_cloud" || kind == "comet_cloud" || kind == "ring_system" ||
                    kind == "installation" || kind == "station";
         }
 
@@ -713,8 +852,7 @@ ORDER BY name COLLATE NOCASE;
             if (host != null && !string.IsNullOrWhiteSpace(host.DisplayName))
             {
                 string n = host.DisplayName.Trim();
-                if (string.Equals(n, "Sol", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(n, "Sun", StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(n, "Sol", StringComparison.OrdinalIgnoreCase) || string.Equals(n, "Sun", StringComparison.OrdinalIgnoreCase))
                     return "the Sun";
                 return n;
             }

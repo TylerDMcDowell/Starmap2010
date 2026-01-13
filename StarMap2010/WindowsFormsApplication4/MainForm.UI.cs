@@ -281,14 +281,6 @@ namespace StarMap2010
                     tvSystemObjects.SelectedNode = e.Node;
             };
 
-            // double-click edits
-            tvSystemObjects.NodeMouseDoubleClick += (s, e) =>
-            {
-                if (e == null) return;
-                tvSystemObjects.SelectedNode = e.Node;
-                Tree_View();
-            };
-
             // NOTE: details panel is still placeholder for now; we'll replace it with WorldCardPanel next.
             tvSystemObjects.AfterSelect += (s, e) =>
             {
@@ -397,6 +389,24 @@ namespace StarMap2010
                 if (dlg.ShowDialog(this) == DialogResult.OK)
                     ReloadAndRefresh();
             }
+        }
+
+        private void InitializeComponent()
+        {
+            this.SuspendLayout();
+            // 
+            // MainForm
+            // 
+            this.ClientSize = new System.Drawing.Size(284, 261);
+            this.Name = "MainForm";
+            this.Load += new System.EventHandler(this.MainForm_Load);
+            this.ResumeLayout(false);
+
+        }
+
+        private void MainForm_Load(object sender, EventArgs e)
+        {
+
         }
     }
 }
