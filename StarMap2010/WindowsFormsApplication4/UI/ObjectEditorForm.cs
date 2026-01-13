@@ -1,16 +1,10 @@
 ﻿// ============================================================
-// File: Ui/ObjectEditorForm.cs
+// File: UI/ObjectEditorForm.cs
 // Project: StarMap2010
 //
 // Large modal viewer/editor shell.
 // View mode shows read-only summary + loaded DB tables.
 // Edit mode still stubbed (Save disabled) until persistence is wired.
-//
-// IMPORTANT UX RULES (locked):
-// - No raw IDs shown to users
-// - Never show radial_order
-// - Orbit phrasing is derived (uses provided _all list context)
-// - Prefer clear, friendly labels over raw column names
 // ============================================================
 
 using System;
@@ -19,6 +13,7 @@ using System.Data;
 using System.Data.SQLite;
 using System.Drawing;
 using System.Globalization;
+using System.Text;
 using System.Windows.Forms;
 using StarMap2010.Models;
 
@@ -43,10 +38,10 @@ namespace StarMap2010.Ui
 
         private TextBox _txtSummary;
 
-        private DataGridView _gridBasics;      // kind-specific: planet_details / moon_details
-        private DataGridView _gridEnv;         // body_environment
-        private DataGridView _gridTerraform;   // terraform_constraints
-        private DataGridView _gridAttrs;       // object_attributes (dictionary-joined)
+        private DataGridView _gridDetails;
+        private DataGridView _gridEnv;
+        private DataGridView _gridTerraform;
+        private DataGridView _gridAttrs;
 
         private Button _btnPrimary;
         private Button _btnCancel;
@@ -97,18 +92,6 @@ namespace StarMap2010.Ui
 
             // ---- Summary tab ----
             var tabSummary = new TabPage("Summary");
-
-            // Split: top = readable narrative summary, bottom = kind-specific basics table
-            var split = new SplitContainer
-            {
-                Dock = DockStyle.Fill,
-                Orientation = Orientation.Horizontal,
-                SplitterWidth = 6,
-                Panel1MinSize = 180,
-                Panel2MinSize = 180
-            };
-            tabSummary.Controls.Add(split);
-
             _txtSummary = new TextBox
             {
                 Dock = DockStyle.Fill,
@@ -119,22 +102,24 @@ namespace StarMap2010.Ui
                 BackColor = Color.White,
                 Font = new Font("Consolas", 10f, FontStyle.Regular)
             };
-            split.Panel1.Controls.Add(_txtSummary);
-
-            _gridBasics = MakePropertyGrid();
-            split.Panel2.Controls.Add(_gridBasics);
-
+            tabSummary.Controls.Add(_txtSummary);
             _tabs.TabPages.Add(tabSummary);
+
+            // ---- Details tab ----
+            var tabDetails = new TabPage("Details");
+            _gridDetails = MakeGridProps();
+            tabDetails.Controls.Add(_gridDetails);
+            _tabs.TabPages.Add(tabDetails);
 
             // ---- Environment tab ----
             var tabEnv = new TabPage("Environment");
-            _gridEnv = MakePropertyGrid();
+            _gridEnv = MakeGridProps();
             tabEnv.Controls.Add(_gridEnv);
             _tabs.TabPages.Add(tabEnv);
 
             // ---- Terraform tab ----
-            var tabTerraform = new TabPage("Terraforming");
-            _gridTerraform = MakePropertyGrid();
+            var tabTerraform = new TabPage("Terraform");
+            _gridTerraform = MakeGridProps();
             tabTerraform.Controls.Add(_gridTerraform);
             _tabs.TabPages.Add(tabTerraform);
 
@@ -153,8 +138,8 @@ namespace StarMap2010.Ui
                 Padding = new Padding(0, 8, 0, 0)
             };
 
-            _btnCancel = new Button { Text = "Cancel", Width = 110, Height = 32, DialogResult = DialogResult.Cancel };
-            _btnPrimary = new Button { Text = "Save", Width = 110, Height = 32, Enabled = false };
+            _btnCancel = new Button { Text = "Cancel", Width = 100, Height = 30, DialogResult = DialogResult.Cancel };
+            _btnPrimary = new Button { Text = "Save", Width = 100, Height = 30, Enabled = false };
 
             _btnPrimary.Click += (s, e) =>
             {
@@ -184,28 +169,25 @@ namespace StarMap2010.Ui
                 SelectionMode = DataGridViewSelectionMode.FullRowSelect,
                 AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
                 BackgroundColor = Color.White,
-                BorderStyle = BorderStyle.FixedSingle,
-                RowHeadersVisible = false
+                BorderStyle = BorderStyle.FixedSingle
             };
             return g;
         }
 
-        // Property grid = two columns, nicer for 1-row tables
-        private static DataGridView MakePropertyGrid()
+        private static DataGridView MakeGridProps()
         {
             var g = MakeGrid();
             g.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-            g.DefaultCellStyle.WrapMode = DataGridViewTriState.True;
-            g.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.AllCells;
+            g.RowHeadersVisible = false;
             return g;
         }
 
         private void RenderHeaderAndSummary()
         {
             string name = (_obj != null && !string.IsNullOrWhiteSpace(_obj.DisplayName)) ? _obj.DisplayName.Trim() : "(unnamed)";
-            string kindRaw = (_obj != null && !string.IsNullOrWhiteSpace(_obj.ObjectKind)) ? _obj.ObjectKind.Trim() : "-";
+            string kind = (_obj != null && !string.IsNullOrWhiteSpace(_obj.ObjectKind)) ? _obj.ObjectKind.Trim() : "-";
 
-            _hdr.Text = name + "  [" + FriendlyKind(kindRaw) + "]";
+            _hdr.Text = name + "  [" + kind + "]";
 
             if (_obj == null)
             {
@@ -220,12 +202,12 @@ namespace StarMap2010.Ui
 
             _txtSummary.Text =
                 "Name:          " + name + "\r\n" +
-                "Kind:          " + FriendlyKind(kindRaw) + "\r\n" +
+                "Kind:          " + FriendlyKind(kind) + "\r\n" +
                 "Orbit:         " + orbitPhrase + "\r\n" +
                 "Notes:         " + FirstLine(_obj.Notes) + "\r\n" +
                 "\r\n" +
-                "Tip: This window is read-only for now.\r\n" +
-                "Use the tabs to view Environment, Terraforming, and Attributes.";
+                "Tip: Double-click or right-click → View… from the tree.\r\n" +
+                "Tabs: Details / Environment / Terraform / Attributes are DB-backed.";
         }
 
         private void LoadAndBindTables()
@@ -234,10 +216,10 @@ namespace StarMap2010.Ui
 
             if (string.IsNullOrWhiteSpace(_dbPath))
             {
-                BindEmpty(_gridBasics, "No DB path provided.");
-                BindEmpty(_gridEnv, "No DB path provided.");
-                BindEmpty(_gridTerraform, "No DB path provided.");
-                BindEmpty(_gridAttrs, "No DB path provided.");
+                BindPropsEmpty(_gridDetails, "No DB path provided.");
+                BindPropsEmpty(_gridEnv, "No DB path provided.");
+                BindPropsEmpty(_gridTerraform, "No DB path provided.");
+                BindAttrsEmpty("No DB path provided.");
                 return;
             }
 
@@ -245,36 +227,30 @@ namespace StarMap2010.Ui
             {
                 string kind = (_obj.ObjectKind ?? "").Trim().ToLowerInvariant();
 
-                // 1) Basics (planet_details OR moon_details OR minimal)
-                DataTable dtBasics;
+                // 1) Details (planet_details OR moon_details OR minimal)
+                DataTable dtDetails;
                 if (kind == "planet" || kind == "dwarf_planet")
-                {
-                    dtBasics = QueryTable("SELECT * FROM planet_details WHERE object_id = @id;", _obj.ObjectId);
-                    BindOneRowAsProperties(_gridBasics, dtBasics, GetPlanetFieldMap(), hideTimestamps: true);
-                }
+                    dtDetails = QueryTable("SELECT * FROM planet_details WHERE object_id = @id;", _obj.ObjectId);
                 else if (kind == "moon")
-                {
-                    dtBasics = QueryTable("SELECT * FROM moon_details WHERE object_id = @id;", _obj.ObjectId);
-                    BindOneRowAsProperties(_gridBasics, dtBasics, GetMoonFieldMap(), hideTimestamps: true);
-                }
+                    dtDetails = QueryTable("SELECT * FROM moon_details WHERE object_id = @id;", _obj.ObjectId);
                 else
-                {
-                    BindEmpty(_gridBasics, "No world details table for: " + FriendlyKind(kind));
-                }
+                    dtDetails = MakeSingleRow("info", "No kind-specific details table for: " + kind);
+
+                BindOneRowAsFriendlyProperties(_gridDetails, dtDetails);
 
                 // 2) Environment
                 var dtEnv = QueryTable("SELECT * FROM body_environment WHERE object_id = @id;", _obj.ObjectId);
-                BindOneRowAsProperties(_gridEnv, dtEnv, GetEnvironmentFieldMap(), hideTimestamps: true);
+                BindOneRowAsFriendlyProperties(_gridEnv, dtEnv);
 
                 // 3) Terraform constraints
                 var dtTer = QueryTable("SELECT * FROM terraform_constraints WHERE object_id = @id;", _obj.ObjectId);
-                BindOneRowAsProperties(_gridTerraform, dtTer, GetTerraformFieldMap(), hideTimestamps: true);
+                BindOneRowAsFriendlyProperties(_gridTerraform, dtTer);
 
-                // 4) Attributes (dictionary-joined, render as a friendly list)
-                var dtAttrs = QueryTable(@"
+                // 4) Attributes (join to dictionary, then collapse to Name/Value/Units/Notes)
+                var dtAttrsRaw = QueryTable(@"
 SELECT
+    oa.attr_key                               AS attr_key,
     COALESCE(ad.display_name, oa.attr_key)    AS name,
-    ad.category                               AS category,
     ad.units                                  AS units,
     ad.value_kind                             AS value_kind,
     oa.value_text                             AS value_text,
@@ -286,56 +262,17 @@ FROM object_attributes oa
 LEFT JOIN attribute_dictionary ad
     ON ad.attr_key = oa.attr_key
 WHERE oa.object_id = @id
-ORDER BY
-    COALESCE(ad.category, '') COLLATE NOCASE,
-    name COLLATE NOCASE;
+ORDER BY name COLLATE NOCASE;
 ", _obj.ObjectId);
 
-                if (dtAttrs == null || dtAttrs.Rows.Count == 0)
-                {
-                    BindEmpty(_gridAttrs, "No attributes for this object.");
-                }
-                else
-                {
-                    // Build a cleaner presentation: Name | Value | Units | Category | Notes
-                    var pretty = new DataTable();
-                    pretty.Columns.Add("Name", typeof(string));
-                    pretty.Columns.Add("Value", typeof(string));
-                    pretty.Columns.Add("Units", typeof(string));
-                    pretty.Columns.Add("Category", typeof(string));
-                    pretty.Columns.Add("Notes", typeof(string));
-
-                    for (int i = 0; i < dtAttrs.Rows.Count; i++)
-                    {
-                        var r = dtAttrs.Rows[i];
-
-                        string nm = SafeStr(r["name"]);
-                        string units = SafeStr(r["units"]);
-                        string cat = SafeStr(r["category"]);
-                        string notes = FirstLine(SafeStr(r["notes"]));
-
-                        string valueKind = SafeStr(r["value_kind"]);
-                        string value = FormatAttributeValue(valueKind,
-                            r["value_text"], r["value_num"], r["value_int"], r["value_bool"]);
-
-                        pretty.Rows.Add(nm, value, units, cat, notes);
-                    }
-
-                    _gridAttrs.DataSource = pretty;
-
-                    // Slightly better column sizing for the attributes list
-                    _gridAttrs.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-                    _gridAttrs.DefaultCellStyle.WrapMode = DataGridViewTriState.True;
-                    _gridAttrs.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.AllCells;
-                }
+                BindAttributesFriendly(dtAttrsRaw);
             }
             catch (Exception ex)
             {
-                string msg = "Load failed: " + ex.Message;
-                BindEmpty(_gridBasics, msg);
-                BindEmpty(_gridEnv, msg);
-                BindEmpty(_gridTerraform, msg);
-                BindEmpty(_gridAttrs, msg);
+                BindPropsEmpty(_gridDetails, "Load failed: " + ex.Message);
+                BindPropsEmpty(_gridEnv, "Load failed: " + ex.Message);
+                BindPropsEmpty(_gridTerraform, "Load failed: " + ex.Message);
+                BindAttrsEmpty("Load failed: " + ex.Message);
             }
         }
 
@@ -355,24 +292,21 @@ ORDER BY
             return dt;
         }
 
-        // Turns a 1-row wide table into a friendly 2-col property list: Field | Value
-        private static void BindOneRowAsProperties(
-            DataGridView grid,
-            DataTable dt,
-            Dictionary<string, string> fieldMap,
-            bool hideTimestamps)
+        // ---------- Friendly binders ----------
+
+        private static void BindOneRowAsFriendlyProperties(DataGridView grid, DataTable dt)
         {
             if (grid == null) return;
 
             if (dt == null || dt.Rows.Count == 0)
             {
-                grid.DataSource = MakeSingleRow("info", "No data.");
+                BindPropsEmpty(grid, "No data.");
                 return;
             }
 
+            // If more than 1 row, show raw table (rare for our current use)
             if (dt.Rows.Count > 1)
             {
-                // Rare for these tables, but if it happens, show raw rows
                 grid.DataSource = dt;
                 return;
             }
@@ -389,153 +323,129 @@ ORDER BY
                 if (c == null) continue;
 
                 string col = c.ColumnName ?? "";
-                if (col.Length == 0) continue;
 
-                // never show raw IDs
-                if (EqualsIgnoreCase(col, "object_id")) continue;
-
-                // optional: hide created/updated timestamps (noise)
-                if (hideTimestamps && (EqualsIgnoreCase(col, "created_utc") || EqualsIgnoreCase(col, "updated_utc")))
-                    continue;
+                // Hide noise / technical columns
+                if (EqualsIgnore(col, "object_id")) continue;
+                if (EndsWithIgnore(col, "_utc")) continue;
 
                 object v = r[i];
+                string s = (v == null || v == DBNull.Value) ? "-" : Convert.ToString(v, CultureInfo.InvariantCulture);
 
-                string label = GetFriendlyLabel(fieldMap, col);
-                string value = FormatCellValue(col, v);
-
-                props.Rows.Add(label, value);
-            }
-
-            if (props.Rows.Count == 0)
-            {
-                grid.DataSource = MakeSingleRow("info", "No visible fields.");
-                return;
+                props.Rows.Add(HumanizeField(col), s);
             }
 
             grid.DataSource = props;
+
+            // Make it look like a clean property list
+            if (grid.Columns.Count >= 2)
+            {
+                grid.Columns[0].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
+                grid.Columns[1].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
+            }
         }
 
-        private static string GetFriendlyLabel(Dictionary<string, string> map, string col)
+        private void BindAttributesFriendly(DataTable dtAttrsRaw)
         {
-            if (map != null)
+            if (dtAttrsRaw == null || dtAttrsRaw.Rows.Count == 0)
             {
-                string key = col ?? "";
-                if (map.ContainsKey(key)) return map[key];
+                BindAttrsEmpty("No attributes for this object.");
+                return;
             }
 
-            // fallback: crude prettify (snake_case -> Title Case)
-            return PrettifyColumnName(col);
+            var dt = new DataTable();
+            dt.Columns.Add("Name", typeof(string));
+            dt.Columns.Add("Value", typeof(string));
+            dt.Columns.Add("Units", typeof(string));
+            dt.Columns.Add("Notes", typeof(string));
+
+            for (int i = 0; i < dtAttrsRaw.Rows.Count; i++)
+            {
+                DataRow r = dtAttrsRaw.Rows[i];
+
+                string name = Convert.ToString(r["name"]);
+                string units = Convert.ToString(r["units"]);
+                string notes = Convert.ToString(r["notes"]);
+
+                string value = CollapseAttrValue(
+                    r["value_text"],
+                    r["value_num"],
+                    r["value_int"],
+                    r["value_bool"],
+                    Convert.ToString(r["value_kind"])
+                );
+
+                dt.Rows.Add(
+                    string.IsNullOrWhiteSpace(name) ? "(unnamed)" : name,
+                    string.IsNullOrWhiteSpace(value) ? "-" : value,
+                    string.IsNullOrWhiteSpace(units) ? "" : units,
+                    string.IsNullOrWhiteSpace(notes) ? "" : notes
+                );
+            }
+
+            _gridAttrs.DataSource = dt;
         }
 
-        private static string PrettifyColumnName(string col)
+        private static string CollapseAttrValue(object vText, object vNum, object vInt, object vBool, string valueKind)
         {
-            if (string.IsNullOrWhiteSpace(col)) return "-";
-
-            string s = col.Trim();
-
-            // common suffixes
-            if (s.EndsWith("_km", StringComparison.OrdinalIgnoreCase)) s = s.Substring(0, s.Length - 3) + " (km)";
-            if (s.EndsWith("_au", StringComparison.OrdinalIgnoreCase)) s = s.Substring(0, s.Length - 3) + " (AU)";
-            if (s.EndsWith("_atm", StringComparison.OrdinalIgnoreCase)) s = s.Substring(0, s.Length - 4) + " (atm)";
-            if (s.EndsWith("_c", StringComparison.OrdinalIgnoreCase)) s = s.Substring(0, s.Length - 2) + " (°C)";
-            if (s.EndsWith("_deg", StringComparison.OrdinalIgnoreCase)) s = s.Substring(0, s.Length - 4) + " (°)";
-
-            s = s.Replace("_", " ");
-
-            // Title case-ish
-            if (s.Length == 0) return "-";
-            return char.ToUpperInvariant(s[0]) + s.Substring(1);
-        }
-
-        private static string FormatCellValue(string colName, object v)
-        {
-            if (v == null || v == DBNull.Value) return "-";
-
-            // bool-ish ints
-            if (v is long || v is int || v is short || v is byte)
+            if (vText != null && vText != DBNull.Value)
             {
-                long n = Convert.ToInt64(v, CultureInfo.InvariantCulture);
-
-                if (LooksBoolish(colName))
-                    return (n != 0) ? "Yes" : "No";
-
-                // population can be large
-                if (EqualsIgnoreCase(colName, "population"))
-                    return n.ToString("N0", CultureInfo.InvariantCulture);
-
-                return n.ToString(CultureInfo.InvariantCulture);
+                string s = Convert.ToString(vText);
+                if (!string.IsNullOrWhiteSpace(s)) return s.Trim();
             }
 
-            if (v is double || v is float || v is decimal)
+            if (vNum != null && vNum != DBNull.Value)
             {
-                double d = Convert.ToDouble(v, CultureInfo.InvariantCulture);
-
-                // show a sane number of decimals
-                if (Math.Abs(d) >= 1000) return d.ToString("N0", CultureInfo.InvariantCulture);
-                if (Math.Abs(d) >= 100) return d.ToString("0.##", CultureInfo.InvariantCulture);
-                if (Math.Abs(d) >= 1) return d.ToString("0.###", CultureInfo.InvariantCulture);
-                return d.ToString("0.####", CultureInfo.InvariantCulture);
+                double d;
+                if (double.TryParse(Convert.ToString(vNum, CultureInfo.InvariantCulture), NumberStyles.Any, CultureInfo.InvariantCulture, out d))
+                    return d.ToString("0.###", CultureInfo.InvariantCulture);
+                return Convert.ToString(vNum, CultureInfo.InvariantCulture);
             }
 
-            // strings and everything else
-            string s = Convert.ToString(v, CultureInfo.InvariantCulture);
-            if (string.IsNullOrWhiteSpace(s)) return "-";
-            return s.Trim();
-        }
+            if (vInt != null && vInt != DBNull.Value)
+                return Convert.ToString(vInt, CultureInfo.InvariantCulture);
 
-        private static bool LooksBoolish(string colName)
-        {
-            if (string.IsNullOrWhiteSpace(colName)) return false;
-
-            string c = colName.Trim().ToLowerInvariant();
-            return c.StartsWith("is_") ||
-                   c == "tidally_locked";
-        }
-
-        private static string SafeStr(object v)
-        {
-            if (v == null || v == DBNull.Value) return "";
-            return Convert.ToString(v, CultureInfo.InvariantCulture) ?? "";
-        }
-
-        private static string FormatAttributeValue(string valueKind, object vt, object vn, object vi, object vb)
-        {
-            string kind = (valueKind ?? "").Trim().ToLowerInvariant();
-
-            // Prefer matching storage column, but still fall back in case of odd data
-            if (kind == "text")
+            if (vBool != null && vBool != DBNull.Value)
             {
-                string s = SafeStr(vt);
-                if (s.Length > 0) return s;
-            }
-            else if (kind == "num" || kind == "number" || kind == "real")
-            {
-                if (vn != null && vn != DBNull.Value) return FormatCellValue("value_num", vn);
-            }
-            else if (kind == "int" || kind == "integer")
-            {
-                if (vi != null && vi != DBNull.Value) return FormatCellValue("value_int", vi);
-            }
-            else if (kind == "bool" || kind == "boolean")
-            {
-                if (vb != null && vb != DBNull.Value) return FormatCellValue("value_bool", vb);
+                int b;
+                if (int.TryParse(Convert.ToString(vBool, CultureInfo.InvariantCulture), out b))
+                    return (b != 0) ? "Yes" : "No";
+                return Convert.ToString(vBool, CultureInfo.InvariantCulture);
             }
 
-            // Fallback: first non-empty
-            string t = SafeStr(vt);
-            if (t.Length > 0) return t;
-
-            if (vn != null && vn != DBNull.Value) return FormatCellValue("value_num", vn);
-            if (vi != null && vi != DBNull.Value) return FormatCellValue("value_int", vi);
-            if (vb != null && vb != DBNull.Value) return FormatCellValue("value_bool", vb);
+            // fallback hint: value_kind exists but no value set
+            if (!string.IsNullOrWhiteSpace(valueKind))
+                return "-";
 
             return "-";
         }
 
-        private static void BindEmpty(DataGridView grid, string msg)
+        private static void BindPropsEmpty(DataGridView grid, string msg)
         {
             if (grid == null) return;
-            grid.DataSource = MakeSingleRow("info", msg ?? "");
+
+            var dt = new DataTable();
+            dt.Columns.Add("Field", typeof(string));
+            dt.Columns.Add("Value", typeof(string));
+            dt.Rows.Add("Info", msg ?? "");
+            grid.DataSource = dt;
+
+            if (grid.Columns.Count >= 2)
+            {
+                grid.Columns[0].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
+                grid.Columns[1].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
+            }
+        }
+
+        private void BindAttrsEmpty(string msg)
+        {
+            if (_gridAttrs == null) return;
+            var dt = new DataTable();
+            dt.Columns.Add("Name", typeof(string));
+            dt.Columns.Add("Value", typeof(string));
+            dt.Columns.Add("Units", typeof(string));
+            dt.Columns.Add("Notes", typeof(string));
+            dt.Rows.Add("Info", msg ?? "", "", "");
+            _gridAttrs.DataSource = dt;
         }
 
         private static DataTable MakeSingleRow(string colName, string value)
@@ -545,6 +455,8 @@ ORDER BY
             dt.Rows.Add(value ?? "");
             return dt;
         }
+
+        // ---------- Mode ----------
 
         private void ApplyMode()
         {
@@ -584,19 +496,16 @@ ORDER BY
             }
         }
 
+        // ---------- Text helpers ----------
+
         private static string FirstLine(string s)
         {
             if (string.IsNullOrWhiteSpace(s)) return "-";
             s = s.Trim();
             int ix = s.IndexOf('\n');
             if (ix >= 0) s = s.Substring(0, ix);
-            if (s.Length > 140) s = s.Substring(0, 140) + "…";
+            if (s.Length > 120) s = s.Substring(0, 120) + "…";
             return s;
-        }
-
-        private static bool EqualsIgnoreCase(string a, string b)
-        {
-            return string.Equals(a ?? "", b ?? "", StringComparison.OrdinalIgnoreCase);
         }
 
         private static string FriendlyKind(string kind)
@@ -624,83 +533,55 @@ ORDER BY
             }
         }
 
-        // ---------------- Friendly field maps (per table) ----------------
-
-        private static Dictionary<string, string> GetPlanetFieldMap()
+        private static string HumanizeField(string snake)
         {
-            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            {
-                { "planet_class", "Class" },
-                { "radius_km", "Radius (km)" },
-                { "mass_earth", "Mass (Earths)" },
-                { "gravity_g", "Surface gravity (g)" },
-                { "day_length_hours", "Day length (hours)" },
-                { "axial_tilt_deg", "Axial tilt (°)" },
-                { "semi_major_axis_au", "Orbit radius (AU)" },
-                { "orbital_period_days", "Orbital period (days)" },
-                { "eccentricity", "Eccentricity" },
-                { "albedo", "Albedo" },
-                { "density_g_cm3", "Density (g/cm³)" },
-                { "population", "Population" },
-                { "tech_level", "Tech level" },
-                { "notes", "Notes" }
-            };
+            if (string.IsNullOrWhiteSpace(snake)) return "-";
+
+            // small unit polish
+            // radius_km -> Radius (km)
+            // semi_major_axis_au -> Semi major axis (AU)
+            string s = snake.Trim();
+
+            string unit = null;
+            if (EndsWithIgnore(s, "_km")) { unit = "km"; s = s.Substring(0, s.Length - 3); }
+            else if (EndsWithIgnore(s, "_au")) { unit = "AU"; s = s.Substring(0, s.Length - 3); }
+            else if (EndsWithIgnore(s, "_atm")) { unit = "atm"; s = s.Substring(0, s.Length - 4); }
+            else if (EndsWithIgnore(s, "_c")) { unit = "°C"; s = s.Substring(0, s.Length - 2); }
+            else if (EndsWithIgnore(s, "_pct")) { unit = "%"; s = s.Substring(0, s.Length - 4); }
+            else if (EndsWithIgnore(s, "_deg")) { unit = "°"; s = s.Substring(0, s.Length - 4); }
+
+            s = s.Replace("_", " ");
+            s = TitleCaseWords(s);
+
+            if (!string.IsNullOrEmpty(unit))
+                s += " (" + unit + ")";
+
+            // a couple of nicer labels
+            if (EqualsIgnore(snake, "env_stage")) return "Environment stage";
+            if (EqualsIgnore(snake, "pressure_atm")) return "Pressure (atm)";
+            if (EqualsIgnore(snake, "avg_temp_c")) return "Average temperature (°C)";
+
+            return s;
         }
 
-        private static Dictionary<string, string> GetMoonFieldMap()
+        private static string TitleCaseWords(string s)
         {
-            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            {
-                { "moon_class", "Class" },
-                { "radius_km", "Radius (km)" },
-                { "mass_earth", "Mass (Earths)" },
-                { "gravity_g", "Surface gravity (g)" },
-                { "day_length_hours", "Day length (hours)" },
-                { "tidally_locked", "Tidally locked" },
-                { "orbital_period_days", "Orbital period (days)" },
-                { "semi_major_axis_km", "Orbit radius (km)" },
-                { "eccentricity", "Eccentricity" },
-                { "density_g_cm3", "Density (g/cm³)" },
-                { "population", "Population" },
-                { "tech_level", "Tech level" },
-                { "notes", "Notes" }
-            };
+            if (string.IsNullOrWhiteSpace(s)) return s;
+            var ti = CultureInfo.InvariantCulture.TextInfo;
+            return ti.ToTitleCase(s.ToLowerInvariant());
         }
 
-        private static Dictionary<string, string> GetEnvironmentFieldMap()
+        private static bool EndsWithIgnore(string s, string suffix)
         {
-            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            {
-                { "env_stage", "Environment stage" },
-                { "atmosphere_type", "Atmosphere" },
-                { "pressure_atm", "Pressure (atm)" },
-                { "avg_temp_c", "Average temperature (°C)" },
-                { "hydrosphere_pct", "Hydrosphere (%)" },
-                { "biosphere", "Biosphere" },
-                { "radiation_level", "Radiation" },
-                { "magnetosphere", "Magnetosphere" },
-                { "habitability", "Habitability" },
-                { "notes", "Notes" }
-            };
+            return s != null && suffix != null && s.EndsWith(suffix, StringComparison.OrdinalIgnoreCase);
         }
 
-        private static Dictionary<string, string> GetTerraformFieldMap()
+        private static bool EqualsIgnore(string a, string b)
         {
-            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            {
-                { "terraform_tier", "Terraforming tier" },
-                { "atmosphere_retention", "Atmosphere retention" },
-                { "radiation_constraint", "Radiation constraint" },
-                { "volatile_budget", "Volatile budget" },
-                { "water_availability", "Water availability" },
-                { "requires_imports", "Requires imports" },
-                { "limiting_factors", "Limiting factors" },
-                { "maintenance_burden", "Maintenance burden" },
-                { "notes", "Notes" }
-            };
+            return string.Equals(a ?? "", b ?? "", StringComparison.OrdinalIgnoreCase);
         }
 
-        // ---------------- Orbit phrase helpers (keep concept / no radial_order shown) ----------------
+        // ---------------- Orbit phrase helpers (existing logic you had) ----------------
 
         private static string DeriveOrbitPhrase_NoContext(SystemObjectInfo obj)
         {
@@ -708,15 +589,15 @@ ORDER BY
 
             string kind = (obj.ObjectKind ?? "").Trim().ToLowerInvariant();
 
-            if (kind == "planet") return "Planetary orbit (position derived)";
-            if (kind == "moon") return "Satellite orbit (position derived)";
-            if (kind == "dwarf_planet") return "Dwarf-planet orbit (position derived)";
-            if (kind == "belt" || kind == "asteroid_belt") return "Belt region (position derived)";
+            if (kind == "planet") return "Planetary orbit (position derived from order)";
+            if (kind == "moon") return "Satellite orbit (position derived from order)";
+            if (kind == "dwarf_planet") return "Dwarf-planet orbit (position derived from order)";
+            if (kind == "belt" || kind == "asteroid_belt") return "Belt region (position derived from order)";
             if (kind == "kuiper_belt") return "Outer belt region";
             if (kind == "oort_cloud" || kind == "comet_cloud") return "Outer cloud region";
-            if (kind == "installation" || kind == "station") return "Artificial orbit (position derived)";
+            if (kind == "installation" || kind == "station") return "Artificial orbit (position derived from order)";
             if (kind == "ring_system") return "Ring region";
-            return "Orbit position derived";
+            return "Orbit position derived from order";
         }
 
         private static string DeriveOrbitPhrase(List<SystemObjectInfo> all, SystemObjectInfo obj)
@@ -790,9 +671,7 @@ ORDER BY
 
                     if (string.Equals(o.ObjectId, obj.ObjectId, StringComparison.Ordinal))
                     {
-                        string hostName = host != null && !string.IsNullOrWhiteSpace(host.DisplayName)
-                            ? host.DisplayName.Trim()
-                            : "its primary";
+                        string hostName = host != null && !string.IsNullOrWhiteSpace(host.DisplayName) ? host.DisplayName.Trim() : "its primary";
                         return Ordinal(moonIndex) + " moon of " + hostName;
                     }
                 }
@@ -816,7 +695,7 @@ ORDER BY
                     return "Inside " + outer.DisplayName.Trim();
             }
 
-            return "Orbit position derived";
+            return "Orbit position derived from order";
         }
 
         private static bool IsOrbitingKind(string kind)
@@ -844,7 +723,7 @@ ORDER BY
 
         private static string Ordinal(int n)
         {
-            if (n <= 0) return n.ToString(CultureInfo.InvariantCulture);
+            if (n <= 0) return n.ToString();
             int mod100 = n % 100;
             if (mod100 >= 11 && mod100 <= 13) return n + "th";
             switch (n % 10)
