@@ -241,7 +241,7 @@ namespace StarMap2010.Ui
                 BindOneRowAsProperties(_gridTerraform, dtTer);
 
                 // 4) Attributes (joined to dictionary for friendly display)
-                var dtAttrs = QueryTable(@"
+                var dtAttrsRaw = QueryTable(@"
 SELECT
     oa.attr_key                               AS attr_key,
     COALESCE(ad.display_name, oa.attr_key)    AS name,
@@ -259,14 +259,14 @@ WHERE oa.object_id = @id
 ORDER BY name COLLATE NOCASE;
 ", _obj.ObjectId);
 
-                if (dtAttrs == null || dtAttrs.Rows.Count == 0)
-                    dtAttrs = MakeSingleRow("info", "No attributes for this object.");
-
-                _gridAttrs.DataSource = dtAttrs;
-
-                // Small polish: hide empty technical columns if you want
-                HideIfExists(_gridAttrs, "attr_key"); // keep name visible
-                // If you prefer to keep attr_key visible, comment the above line.
+                if (dtAttrsRaw == null || dtAttrsRaw.Rows.Count == 0)
+                {
+                    BindEmpty(_gridAttrs, "No attributes for this object.");
+                }
+                else
+                {
+                    _gridAttrs.DataSource = BuildFriendlyAttributesTable(dtAttrsRaw);
+                }
             }
             catch (Exception ex)
             {
@@ -324,6 +324,10 @@ ORDER BY name COLLATE NOCASE;
                 string col = c.ColumnName ?? "";
                 if (string.Equals(col, "object_id", StringComparison.OrdinalIgnoreCase))
                     continue; // hide noise
+                if (string.Equals(col, "created_utc", StringComparison.OrdinalIgnoreCase))
+                    continue; // hide noise
+                if (string.Equals(col, "updated_utc", StringComparison.OrdinalIgnoreCase))
+                    continue; // hide noise
 
                 object v = r[i];
                 string s = (v == null || v == DBNull.Value) ? "-" : Convert.ToString(v);
@@ -348,26 +352,102 @@ ORDER BY name COLLATE NOCASE;
             return dt;
         }
 
-        private static void HideIfExists(DataGridView g, string colName)
-        {
-            if (g == null || string.IsNullOrEmpty(colName)) return;
-            if (g.Columns == null) return;
+        // ---------------- Friendly Attributes Table ----------------
 
-            for (int i = 0; i < g.Columns.Count; i++)
+        private static DataTable BuildFriendlyAttributesTable(DataTable raw)
+        {
+            var dt = new DataTable();
+            dt.Columns.Add("Name", typeof(string));
+            dt.Columns.Add("Value", typeof(string));
+            dt.Columns.Add("Units", typeof(string));
+            dt.Columns.Add("Notes", typeof(string));
+
+            for (int i = 0; i < raw.Rows.Count; i++)
             {
-                var c = g.Columns[i];
-                if (c != null && string.Equals(c.DataPropertyName, colName, StringComparison.OrdinalIgnoreCase))
+                var r = raw.Rows[i];
+
+                string name = SafeStr(r, "name");
+                string units = SafeStr(r, "units");
+                string kind = SafeStr(r, "value_kind");
+
+                string value = CoerceValue(kind,
+                    raw.Columns.Contains("value_text") ? r["value_text"] : null,
+                    raw.Columns.Contains("value_num") ? r["value_num"] : null,
+                    raw.Columns.Contains("value_int") ? r["value_int"] : null,
+                    raw.Columns.Contains("value_bool") ? r["value_bool"] : null
+                );
+
+                string notes = SafeStr(r, "notes");
+                if (string.IsNullOrWhiteSpace(notes) || notes == "-") notes = "";
+
+                dt.Rows.Add(
+                    string.IsNullOrWhiteSpace(name) ? "(unnamed)" : name,
+                    string.IsNullOrWhiteSpace(value) ? "-" : value,
+                    string.IsNullOrWhiteSpace(units) ? "" : units,
+                    notes
+                );
+            }
+
+            return dt;
+        }
+
+        private static string CoerceValue(string valueKind, object text, object num, object i, object b)
+        {
+            string k = (valueKind ?? "").Trim().ToLowerInvariant();
+
+            if (k == "bool" || k == "boolean")
+            {
+                int iv = ToInt(b);
+                return (iv != 0) ? "Yes" : "No";
+            }
+
+            if (k == "int" || k == "integer")
+            {
+                if (i != null && i != DBNull.Value) return Convert.ToString(i);
+                if (num != null && num != DBNull.Value)
                 {
-                    c.Visible = false;
-                    return;
-                }
-                if (c != null && string.Equals(c.Name, colName, StringComparison.OrdinalIgnoreCase))
-                {
-                    c.Visible = false;
-                    return;
+                    try { return Convert.ToString(Convert.ToInt32(num)); }
+                    catch { return Convert.ToString(num); }
                 }
             }
+
+            if (k == "num" || k == "number" || k == "real" || k == "float" || k == "double")
+            {
+                if (num != null && num != DBNull.Value) return Convert.ToString(num);
+                if (i != null && i != DBNull.Value) return Convert.ToString(i);
+            }
+
+            // text / default
+            if (text != null && text != DBNull.Value) return Convert.ToString(text);
+
+            // fallback: any populated numeric
+            if (num != null && num != DBNull.Value) return Convert.ToString(num);
+            if (i != null && i != DBNull.Value) return Convert.ToString(i);
+
+            // fallback: bool
+            if (b != null && b != DBNull.Value) return (ToInt(b) != 0) ? "Yes" : "No";
+
+            return "-";
         }
+
+        private static int ToInt(object o)
+        {
+            if (o == null || o == DBNull.Value) return 0;
+            try { return Convert.ToInt32(o); }
+            catch { return 0; }
+        }
+
+        private static string SafeStr(DataRow r, string col)
+        {
+            if (r == null || string.IsNullOrEmpty(col)) return "";
+            if (r.Table == null || r.Table.Columns == null) return "";
+            if (!r.Table.Columns.Contains(col)) return "";
+            object v = r[col];
+            if (v == null || v == DBNull.Value) return "";
+            return Convert.ToString(v);
+        }
+
+        // ---------------- Mode / buttons ----------------
 
         private void ApplyMode()
         {

@@ -36,6 +36,7 @@ namespace StarMap2010.Data
         {
             if (ord < 0) return def;
             if (r.IsDBNull(ord)) return def;
+
             try { return Convert.ToInt32(r.GetValue(ord)); }
             catch { return def; }
         }
@@ -48,7 +49,8 @@ namespace StarMap2010.Data
         }
 
         /// <summary>
-        /// Loads ALL system_objects for a system_id. Caller builds a tree by parent_object_id.
+        /// Loads ALL system_objects for a system_id.
+        /// Caller builds a tree by parent_object_id.
         /// </summary>
         public List<SystemObjectInfo> LoadObjectsForSystem(string systemId)
         {
@@ -66,7 +68,9 @@ namespace StarMap2010.Data
                     " object_id, system_id, object_kind, parent_object_id, orbit_host_object_id, radial_order, " +
                     " display_name, notes, related_table, related_id, flags, created_utc, updated_utc " +
                     "FROM system_objects " +
-                    "WHERE system_id = @sid";
+                    "WHERE system_id = @sid " +
+                    // Stable order helps deterministic tree builds
+                    "ORDER BY COALESCE(parent_object_id,''), radial_order, object_kind, display_name COLLATE NOCASE;";
 
                 cmd.Parameters.AddWithValue("@sid", systemId);
 
@@ -89,17 +93,21 @@ namespace StarMap2010.Data
                     while (rd.Read())
                     {
                         var x = new SystemObjectInfo();
+
                         x.ObjectId = ReadString(rd, o_object_id);
                         x.SystemId = ReadString(rd, o_system_id);
                         x.ObjectKind = ReadString(rd, o_kind);
                         x.ParentObjectId = ReadString(rd, o_parent);
                         x.OrbitHostObjectId = ReadString(rd, o_orbit);
                         x.RadialOrder = ReadInt(rd, o_radial, 0);
+
                         x.DisplayName = ReadString(rd, o_name);
                         x.Notes = ReadString(rd, o_notes);
+
                         x.RelatedTable = ReadString(rd, o_rtable);
                         x.RelatedId = ReadString(rd, o_rid);
                         x.Flags = ReadString(rd, o_flags);
+
                         x.CreatedUtc = ReadString(rd, o_created);
                         x.UpdatedUtc = ReadString(rd, o_updated);
 
@@ -112,7 +120,8 @@ namespace StarMap2010.Data
         }
 
         /// <summary>
-        /// Upsert by object_id. If exists -> update; else insert.
+        /// Upsert by object_id.
+        /// If exists -> update; else insert.
         /// </summary>
         public void Upsert(SystemObjectInfo o)
         {
@@ -144,6 +153,7 @@ namespace StarMap2010.Data
                     chk.Transaction = tx;
                     chk.CommandText = "SELECT 1 FROM system_objects WHERE object_id=@id LIMIT 1";
                     chk.Parameters.AddWithValue("@id", o.ObjectId);
+
                     object v = chk.ExecuteScalar();
                     exists = (v != null && v != DBNull.Value);
                 }
@@ -168,8 +178,10 @@ namespace StarMap2010.Data
                         ins.Parameters.AddWithValue("@parent_object_id", (object)o.ParentObjectId ?? DBNull.Value);
                         ins.Parameters.AddWithValue("@orbit_host_object_id", (object)o.OrbitHostObjectId ?? DBNull.Value);
                         ins.Parameters.AddWithValue("@radial_order", o.RadialOrder);
+
                         ins.Parameters.AddWithValue("@display_name", o.DisplayName);
                         ins.Parameters.AddWithValue("@notes", (object)o.Notes ?? DBNull.Value);
+
                         ins.Parameters.AddWithValue("@related_table", (object)o.RelatedTable ?? DBNull.Value);
                         ins.Parameters.AddWithValue("@related_id", (object)o.RelatedId ?? DBNull.Value);
                         ins.Parameters.AddWithValue("@flags", (object)o.Flags ?? DBNull.Value);
@@ -202,11 +214,14 @@ namespace StarMap2010.Data
                         upd.Parameters.AddWithValue("@parent_object_id", (object)o.ParentObjectId ?? DBNull.Value);
                         upd.Parameters.AddWithValue("@orbit_host_object_id", (object)o.OrbitHostObjectId ?? DBNull.Value);
                         upd.Parameters.AddWithValue("@radial_order", o.RadialOrder);
+
                         upd.Parameters.AddWithValue("@display_name", o.DisplayName);
                         upd.Parameters.AddWithValue("@notes", (object)o.Notes ?? DBNull.Value);
+
                         upd.Parameters.AddWithValue("@related_table", (object)o.RelatedTable ?? DBNull.Value);
                         upd.Parameters.AddWithValue("@related_id", (object)o.RelatedId ?? DBNull.Value);
                         upd.Parameters.AddWithValue("@flags", (object)o.Flags ?? DBNull.Value);
+
                         upd.Parameters.AddWithValue("@object_id", o.ObjectId);
 
                         upd.ExecuteNonQuery();
@@ -218,7 +233,8 @@ namespace StarMap2010.Data
         }
 
         /// <summary>
-        /// Deletes a node by object_id. Because of your FK ON DELETE CASCADE on parent_object_id,
+        /// Deletes a node by object_id.
+        /// Because of your FK ON DELETE CASCADE on parent_object_id,
         /// deleting a parent will delete its subtree automatically.
         /// </summary>
         public void DeleteByObjectId(string objectId)
@@ -252,10 +268,12 @@ namespace StarMap2010.Data
                     "SELECT object_id FROM system_objects " +
                     "WHERE system_id=@sid AND object_kind='system_root' " +
                     "ORDER BY radial_order LIMIT 1";
+
                 cmd.Parameters.AddWithValue("@sid", systemId);
 
                 object v = cmd.ExecuteScalar();
                 if (v == null || v == DBNull.Value) return null;
+
                 return Convert.ToString(v);
             }
         }
