@@ -31,6 +31,8 @@ namespace StarMap2010.Ui
         Edit = 1
     }
 
+
+
     public sealed class ObjectEditorForm : Form
     {
         private readonly string _dbPath;
@@ -50,6 +52,9 @@ namespace StarMap2010.Ui
 
         private Button _btnPrimary;
         private Button _btnCancel;
+
+
+
 
         public ObjectEditorForm(string dbPath, SystemObjectInfo obj, ObjectEditorMode mode, List<SystemObjectInfo> all)
         {
@@ -272,15 +277,18 @@ namespace StarMap2010.Ui
                 else
                     dtDetails = MakeSingleRow("info", "No kind-specific details table for: " + kind);
 
-                BindOneRowAsFriendlyProperties(_gridDetails, dtDetails);
+                BindOneRowAsFriendlyProperties(_gridDetails, dtDetails, DetailsOrder);
+
 
                 // 2) Environment
                 var dtEnv = QueryTable("SELECT * FROM body_environment WHERE object_id = @id;", _obj.ObjectId);
-                BindOneRowAsFriendlyProperties(_gridEnv, dtEnv);
+                BindOneRowAsFriendlyProperties(_gridEnv, dtEnv, EnvironmentOrder);
+
 
                 // 3) Terraform constraints
                 var dtTer = QueryTable("SELECT * FROM terraform_constraints WHERE object_id = @id;", _obj.ObjectId);
-                BindOneRowAsFriendlyProperties(_gridTerraform, dtTer);
+                BindOneRowAsFriendlyProperties(_gridTerraform, dtTer, TerraformOrder);
+
 
                 // 4) Attributes (join to dictionary for display)
                 var dtAttrsRaw = QueryTable(
@@ -329,10 +337,9 @@ namespace StarMap2010.Ui
 
         // ---------- Friendly binders ----------
 
-        private static void BindOneRowAsFriendlyProperties(DataGridView grid, DataTable dt)
+        private static void BindOneRowAsFriendlyProperties(DataGridView grid, DataTable dt, string[] preferredOrder)
         {
-            if (grid == null)
-                return;
+            if (grid == null) return;
 
             if (dt == null || dt.Rows.Count == 0)
             {
@@ -340,9 +347,9 @@ namespace StarMap2010.Ui
                 return;
             }
 
-            // If more than 1 row, show raw table (rare for our current use)
             if (dt.Rows.Count > 1)
             {
+                // Rare for our current detail tables; show raw
                 grid.DataSource = dt;
                 return;
             }
@@ -353,54 +360,87 @@ namespace StarMap2010.Ui
 
             DataRow r = dt.Rows[0];
 
+            // Collect visible columns (except notes; handled specially)
+            var cols = new List<DataColumn>();
+            string notesValue = null;
+
             for (int i = 0; i < dt.Columns.Count; i++)
             {
                 var c = dt.Columns[i];
                 if (c == null) continue;
 
                 string col = c.ColumnName ?? "";
-
-                // Hide noisy / technical columns
-                if (ShouldHideColumn(col))
-                    continue;
+                if (ShouldHideColumn(col)) continue;
 
                 object v = r[i];
-                if (v == null || v == DBNull.Value)
-                    continue;
+                string s = FriendlyValue(col, v);
+                if (s == null) continue;
 
-                string s = Convert.ToString(v, CultureInfo.InvariantCulture);
-                if (string.IsNullOrWhiteSpace(s))
-                    continue;
-
-
-
-
-                if (EqualsIgnore(col, "tidally_locked"))
+                if (EqualsIgnore(col, "notes"))
                 {
-                    int b;
-                    if (int.TryParse(s, out b))
-                        s = (b != 0) ? "Yes" : "No";
+                    notesValue = s;
+                    continue;
                 }
 
-                string label = HumanizeField(col);
-                if (EqualsIgnore(col, "planet_class") || EqualsIgnore(col, "moon_class"))
-                    label = "Class";
-
-                props.Rows.Add(label, s.Trim());
+                cols.Add(c);
             }
 
-            if (props.Rows.Count == 0)
-                props.Rows.Add("Info", "No displayable fields.");
+            // Sort by preferred order, then alpha
+            cols.Sort(delegate(DataColumn a, DataColumn b)
+            {
+                int ra = GetOrderRank(preferredOrder, a.ColumnName);
+                int rb = GetOrderRank(preferredOrder, b.ColumnName);
+                if (ra != rb) return ra.CompareTo(rb);
+                return string.Compare(a.ColumnName, b.ColumnName, StringComparison.OrdinalIgnoreCase);
+            });
+
+            // Add rows in order
+            for (int i = 0; i < cols.Count; i++)
+            {
+                string col = cols[i].ColumnName ?? "";
+                string val = FriendlyValue(col, r[col]);
+                if (val == null) continue;
+
+                props.Rows.Add(FriendlyFieldLabel(col), val);
+            }
+
+            // Notes rule: short = near top, long = bottom
+            if (!string.IsNullOrWhiteSpace(notesValue))
+            {
+                var notesRow = props.NewRow();
+                notesRow[0] = "Notes";
+                notesRow[1] = notesValue.Trim();
+
+                if (notesValue.Length <= NotesShortLimit)
+                {
+                    // Put right after Class if present, otherwise at top
+                    int insertAt = 0;
+                    for (int i = 0; i < props.Rows.Count; i++)
+                    {
+                        var f = Convert.ToString(props.Rows[i]["Field"]);
+                        if (string.Equals(f, "Class", StringComparison.OrdinalIgnoreCase))
+                        {
+                            insertAt = i + 1;
+                            break;
+                        }
+                    }
+                    props.Rows.InsertAt(notesRow, insertAt);
+                }
+                else
+                {
+                    props.Rows.Add(notesRow);
+                }
+            }
 
             grid.DataSource = props;
 
-            // Make it look like a clean property list
             if (grid.Columns.Count >= 2)
             {
                 grid.Columns[0].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
                 grid.Columns[1].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
             }
         }
+
 
         private void BindAttributesCollapsed(DataTable dtAttrsRaw)
         {
@@ -504,32 +544,6 @@ namespace StarMap2010.Ui
             return "-";
         }
 
-        private static bool ShouldHideColumn(string col)
-        {
-            if (string.IsNullOrWhiteSpace(col))
-                return true;
-
-            if (EqualsIgnore(col, "created_utc") || EqualsIgnore(col, "updated_utc"))
-                return true;
-
-            // Hard hides
-            if (EqualsIgnore(col, "object_id"))
-                return true;
-
-            // Timestamps
-            if (EndsWithIgnore(col, "_utc"))
-                return true;
-
-            // Common internal IDs (keep this conservative; adjust if needed)
-            if (EqualsIgnore(col, "created_by") || EqualsIgnore(col, "updated_by"))
-                return true;
-
-            // Sorting-only / internal
-            if (EqualsIgnore(col, "radial_order"))
-                return true;
-
-            return false;
-        }
 
         private static void BindPropsEmpty(DataGridView grid, string msg)
         {
@@ -922,5 +936,147 @@ namespace StarMap2010.Ui
             if (!string.IsNullOrWhiteSpace(b)) return b.Trim();
             return null;
         }
+
+        // ------------------------------------------------------------
+        // Field ordering (DM-first) + Notes placement rule
+        // ------------------------------------------------------------
+
+        private const int NotesShortLimit = 120;
+
+        private static readonly string[] DetailsOrder = new[]
+{
+    // What is it?
+    "planet_class", "moon_class",
+    "population",
+    "tech_level",
+
+    // Lived experience
+    "day_length_hours",
+    "tidally_locked",
+    "axial_tilt_deg",
+
+    // Calendar / orbit
+    "orbital_period_days",
+    "semi_major_axis_au",
+    "semi_major_axis_km",
+    "eccentricity",
+
+    // Hard stats (least narrative)
+    "gravity_g",
+    "radius_km",
+    "mass_earth",
+    "density_g_cm3",
+    "albedo"
+
+    // notes handled specially
+};
+
+        private static readonly string[] EnvironmentOrder = new[]
+{
+    // Can we live here?
+    "habitability",
+    "atmosphere_type",
+    "pressure_atm",
+    "avg_temp_c",
+    "hydrosphere_pct",
+    "biosphere",
+
+    // Threats / protection
+    "radiation_level",
+    "magnetosphere",
+
+    // Meta
+    "env_stage"
+
+    // notes handled specially
+};
+
+        private static readonly string[] TerraformOrder = new[]
+{
+    // Feasibility first
+    "terraform_tier",
+    "limiting_factors",
+    "requires_imports",
+
+    // Constraints
+    "water_availability",
+    "volatile_budget",
+    "atmosphere_retention",
+    "radiation_constraint",
+    "maintenance_burden"
+
+    // notes handled specially
+};
+
+        private static int GetOrderRank(string[] order, string col)
+        {
+            if (order == null || string.IsNullOrWhiteSpace(col)) return 9999;
+
+            for (int i = 0; i < order.Length; i++)
+                if (EqualsIgnore(col, order[i])) return i;
+
+            return 9999;
+        }
+
+        private static string FriendlyFieldLabel(string col)
+        {
+            if (EqualsIgnore(col, "planet_class") || EqualsIgnore(col, "moon_class")) return "Class";
+            if (EqualsIgnore(col, "tidally_locked")) return "Tidally locked";
+            if (EqualsIgnore(col, "semi_major_axis_au")) return "Semi-major axis (AU)";
+            if (EqualsIgnore(col, "semi_major_axis_km")) return "Semi-major axis (km)";
+            if (EqualsIgnore(col, "axial_tilt_deg")) return "Axial tilt (°)";
+            if (EqualsIgnore(col, "day_length_hours")) return "Day length (hours)";
+            if (EqualsIgnore(col, "orbital_period_days")) return "Orbital period (days)";
+            if (EqualsIgnore(col, "avg_temp_c")) return "Avg temp (°C)";
+            if (EqualsIgnore(col, "pressure_atm")) return "Pressure (atm)";
+            if (EqualsIgnore(col, "hydrosphere_pct")) return "Hydrosphere (%)";
+            return HumanizeField(col);
+        }
+
+        private static string FriendlyValue(string col, object v)
+        {
+            if (v == null || v == DBNull.Value) return null;
+
+            string s = Convert.ToString(v, CultureInfo.InvariantCulture);
+            if (string.IsNullOrWhiteSpace(s)) return null;
+            s = s.Trim();
+
+            // Booleans stored as 0/1
+            if (EqualsIgnore(col, "tidally_locked"))
+            {
+                int b;
+                if (int.TryParse(s, out b))
+                    return (b != 0) ? "Yes" : "No";
+            }
+
+            return s;
+        }
+
+        private static bool ShouldHideColumn(string col)
+        {
+            if (string.IsNullOrWhiteSpace(col))
+                return true;
+
+            // Hard hides
+            if (EqualsIgnore(col, "object_id"))
+                return true;
+
+            // Timestamps / noise
+            if (EqualsIgnore(col, "created_utc") || EqualsIgnore(col, "updated_utc"))
+                return true;
+            if (EndsWithIgnore(col, "_utc"))
+                return true;
+
+            // Sorting-only / internal
+            if (EqualsIgnore(col, "radial_order"))
+                return true;
+
+            // Common internal IDs
+            if (EqualsIgnore(col, "created_by") || EqualsIgnore(col, "updated_by"))
+                return true;
+
+            return false;
+        }
+
     }
 }
