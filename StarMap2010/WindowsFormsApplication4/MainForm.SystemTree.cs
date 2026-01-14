@@ -41,6 +41,8 @@ namespace StarMap2010
             var miAddSibling = new ToolStripMenuItem("Add Sibling…");
             var miEdit = new ToolStripMenuItem("Edit…");
             var miDelete = new ToolStripMenuItem("Delete…");
+            var miEditDetails = new ToolStripMenuItem("Edit Details…");
+            miEditDetails.Click += (s, e) => Tree_EditDetails();
 
             miView.Click += (s, e) => Tree_View();
             miAddChild.Click += (s, e) => Tree_AddChild();
@@ -49,12 +51,14 @@ namespace StarMap2010
             miDelete.Click += (s, e) => Tree_Delete();
 
             _treeMenu.Items.Add(miView);
+            _treeMenu.Items.Add(miEditDetails);
             _treeMenu.Items.Add(new ToolStripSeparator());
             _treeMenu.Items.Add(miAddChild);
             _treeMenu.Items.Add(miAddSibling);
             _treeMenu.Items.Add(new ToolStripSeparator());
             _treeMenu.Items.Add(miEdit);
             _treeMenu.Items.Add(miDelete);
+
 
             _treeMenu.Opening += (s, e) =>
             {
@@ -73,6 +77,7 @@ namespace StarMap2010
                 miAddSibling.Enabled = hasSystem && hasNode && !isRoot;
                 miEdit.Enabled = hasSystem && hasNode;
                 miDelete.Enabled = hasSystem && hasNode && !isRoot;
+                miEditDetails.Enabled = hasSystem && hasNode;
             };
 
             tvSystemObjects.ContextMenuStrip = _treeMenu;
@@ -456,6 +461,13 @@ namespace StarMap2010
             var cur = GetSelectedTreeObject();
             if (cur == null) return;
             OpenViewerForObject(cur);
+        }
+
+        private void Tree_EditDetails()
+        {
+            var cur = GetSelectedTreeObject();
+            if (cur == null) return;
+            OpenEditorForObject(cur);
         }
 
 

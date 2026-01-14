@@ -53,6 +53,8 @@ namespace StarMap2010.Ui
         private Button _btnPrimary;
         private Button _btnCancel;
 
+        private DataTable _dtEnvEdit;
+        private DataTable _dtTerEdit;
 
 
 
@@ -172,12 +174,31 @@ namespace StarMap2010.Ui
                     return;
                 }
 
-                // Edit mode: stub (no persistence yet)
-                MessageBox.Show(
-                    "Save is not implemented yet.\r\n\r\nThis window is read-only for now; Edit mode is a stub until persistence is wired.",
-                    "Not Implemented",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
+                try
+                {
+                    using (var conn = new SQLiteConnection("Data Source=" + _dbPath + ";Version=3;"))
+                    {
+                        conn.Open();
+                        using (var tx = conn.BeginTransaction())
+                        {
+                            SaveEnvironment(conn, tx);
+                            SaveTerraform(conn, tx);
+                            tx.Commit();
+                        }
+                    }
+
+                    DialogResult = DialogResult.OK;
+                    Close();
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(
+                        "Save failed:\r\n" + ex.Message,
+                        "Error",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Error);
+                }
+
             };
 
             buttons.Controls.Add(_btnCancel);
@@ -268,6 +289,10 @@ namespace StarMap2010.Ui
             {
                 string kind = (_obj.ObjectKind ?? "").Trim().ToLowerInvariant();
 
+                EnsureRowExists("body_environment", _obj.ObjectId);
+                EnsureRowExists("terraform_constraints", _obj.ObjectId);
+
+
                 // 1) Details (planet_details OR moon_details OR minimal)
                 DataTable dtDetails;
                 if (kind == "planet" || kind == "dwarf_planet")
@@ -281,13 +306,35 @@ namespace StarMap2010.Ui
 
 
                 // 2) Environment
-                var dtEnv = QueryTable("SELECT * FROM body_environment WHERE object_id = @id;", _obj.ObjectId);
-                BindOneRowAsFriendlyProperties(_gridEnv, dtEnv, EnvironmentOrder);
+                _dtEnvEdit = QueryTable("SELECT * FROM body_environment WHERE object_id = @id;", _obj.ObjectId);
 
+                if (_mode == ObjectEditorMode.Edit)
+                {
+                    _gridEnv.ReadOnly = false;
+                    _gridEnv.DataSource = _dtEnvEdit;
+                    HideRawColumns(_gridEnv);
+                }
+                else
+                {
+                    _gridEnv.ReadOnly = true;
+                    BindOneRowAsFriendlyProperties(_gridEnv, _dtEnvEdit, EnvironmentOrder);
+                }
 
                 // 3) Terraform constraints
-                var dtTer = QueryTable("SELECT * FROM terraform_constraints WHERE object_id = @id;", _obj.ObjectId);
-                BindOneRowAsFriendlyProperties(_gridTerraform, dtTer, TerraformOrder);
+                _dtTerEdit = QueryTable("SELECT * FROM terraform_constraints WHERE object_id = @id;", _obj.ObjectId);
+
+                if (_mode == ObjectEditorMode.Edit)
+                {
+                    _gridTerraform.ReadOnly = false;
+                    _gridTerraform.DataSource = _dtTerEdit;
+                    HideRawColumns(_gridTerraform);
+                }
+                else
+                {
+                    _gridTerraform.ReadOnly = true;
+                    BindOneRowAsFriendlyProperties(_gridTerraform, _dtTerEdit, TerraformOrder);
+                }
+
 
 
                 // 4) Attributes (join to dictionary for display)
@@ -1077,6 +1124,132 @@ namespace StarMap2010.Ui
 
             return false;
         }
+        private void EnsureRowExists(string tableName, string objectId)
+        {
+            if (string.IsNullOrWhiteSpace(tableName) || string.IsNullOrWhiteSpace(objectId))
+                return;
+
+            using (var conn = new SQLiteConnection("Data Source=" + _dbPath + ";Version=3;"))
+            using (var cmd = new SQLiteCommand(conn))
+            {
+                conn.Open();
+
+                cmd.CommandText = "SELECT COUNT(*) FROM " + tableName + " WHERE object_id = @id;";
+                cmd.Parameters.AddWithValue("@id", objectId);
+                long count = (long)cmd.ExecuteScalar();
+
+                if (count > 0) return;
+
+                cmd.Parameters.Clear();
+                cmd.CommandText = "INSERT INTO " + tableName + " (object_id) VALUES (@id);";
+                cmd.Parameters.AddWithValue("@id", objectId);
+                cmd.ExecuteNonQuery();
+            }
+        }
+
+        private static void HideRawColumns(DataGridView grid)
+        {
+            if (grid == null) return;
+
+            for (int i = 0; i < grid.Columns.Count; i++)
+            {
+                var c = grid.Columns[i];
+                if (c == null) continue;
+
+                string name = c.Name ?? c.DataPropertyName ?? "";
+                if (ShouldHideColumn(name))
+                    c.Visible = false;
+            }
+        }
+
+        private static object DbOrNull(object v)
+        {
+            if (v == null || v == DBNull.Value) return DBNull.Value;
+
+            var s = v as string;
+            if (s != null && string.IsNullOrWhiteSpace(s)) return DBNull.Value;
+
+            return v;
+        }
+
+        private void SaveEnvironment(SQLiteConnection conn, SQLiteTransaction tx)
+        {
+            if (_dtEnvEdit == null || _dtEnvEdit.Rows.Count == 0) return;
+
+            DataRow r = _dtEnvEdit.Rows[0];
+
+            using (var cmd = new SQLiteCommand(conn))
+            {
+                cmd.Transaction = tx;
+                cmd.CommandText =
+                    @"UPDATE body_environment SET
+                env_stage = @env_stage,
+                atmosphere_type = @atmosphere_type,
+                pressure_atm = @pressure_atm,
+                avg_temp_c = @avg_temp_c,
+                hydrosphere_pct = @hydrosphere_pct,
+                biosphere = @biosphere,
+                radiation_level = @radiation_level,
+                magnetosphere = @magnetosphere,
+                habitability = @habitability,
+                notes = @notes
+              WHERE object_id = @object_id;";
+
+                cmd.Parameters.AddWithValue("@object_id", _obj.ObjectId);
+
+                cmd.Parameters.AddWithValue("@env_stage", DbOrNull(r["env_stage"]));
+                cmd.Parameters.AddWithValue("@atmosphere_type", DbOrNull(r["atmosphere_type"]));
+                cmd.Parameters.AddWithValue("@pressure_atm", DbOrNull(r["pressure_atm"]));
+                cmd.Parameters.AddWithValue("@avg_temp_c", DbOrNull(r["avg_temp_c"]));
+                cmd.Parameters.AddWithValue("@hydrosphere_pct", DbOrNull(r["hydrosphere_pct"]));
+                cmd.Parameters.AddWithValue("@biosphere", DbOrNull(r["biosphere"]));
+                cmd.Parameters.AddWithValue("@radiation_level", DbOrNull(r["radiation_level"]));
+                cmd.Parameters.AddWithValue("@magnetosphere", DbOrNull(r["magnetosphere"]));
+                cmd.Parameters.AddWithValue("@habitability", DbOrNull(r["habitability"]));
+                cmd.Parameters.AddWithValue("@notes", DbOrNull(r["notes"]));
+
+                cmd.ExecuteNonQuery();
+            }
+        }
+
+        private void SaveTerraform(SQLiteConnection conn, SQLiteTransaction tx)
+        {
+            if (_dtTerEdit == null || _dtTerEdit.Rows.Count == 0) return;
+
+            DataRow r = _dtTerEdit.Rows[0];
+
+            using (var cmd = new SQLiteCommand(conn))
+            {
+                cmd.Transaction = tx;
+                cmd.CommandText =
+                    @"UPDATE terraform_constraints SET
+                terraform_tier = @terraform_tier,
+                atmosphere_retention = @atmosphere_retention,
+                radiation_constraint = @radiation_constraint,
+                volatile_budget = @volatile_budget,
+                water_availability = @water_availability,
+                requires_imports = @requires_imports,
+                limiting_factors = @limiting_factors,
+                maintenance_burden = @maintenance_burden,
+                notes = @notes
+              WHERE object_id = @object_id;";
+
+                cmd.Parameters.AddWithValue("@object_id", _obj.ObjectId);
+
+                cmd.Parameters.AddWithValue("@terraform_tier", DbOrNull(r["terraform_tier"]));
+                cmd.Parameters.AddWithValue("@atmosphere_retention", DbOrNull(r["atmosphere_retention"]));
+                cmd.Parameters.AddWithValue("@radiation_constraint", DbOrNull(r["radiation_constraint"]));
+                cmd.Parameters.AddWithValue("@volatile_budget", DbOrNull(r["volatile_budget"]));
+                cmd.Parameters.AddWithValue("@water_availability", DbOrNull(r["water_availability"]));
+                cmd.Parameters.AddWithValue("@requires_imports", DbOrNull(r["requires_imports"]));
+                cmd.Parameters.AddWithValue("@limiting_factors", DbOrNull(r["limiting_factors"]));
+                cmd.Parameters.AddWithValue("@maintenance_burden", DbOrNull(r["maintenance_burden"]));
+                cmd.Parameters.AddWithValue("@notes", DbOrNull(r["notes"]));
+
+                cmd.ExecuteNonQuery();
+            }
+        }
+
 
     }
 }
