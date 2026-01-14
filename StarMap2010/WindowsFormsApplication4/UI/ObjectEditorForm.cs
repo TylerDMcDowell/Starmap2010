@@ -2,15 +2,16 @@
 // File: UI/ObjectEditorForm.cs
 // Project: StarMap2010
 //
-// Large modal viewer/editor shell.
-// View mode shows read-only summary + loaded DB tables.
-// Edit mode still stubbed (Save does not persist yet).
+// One-stop modal viewer/editor for a single system_object.
+// - View mode: read-only, friendly Field/Value display.
+// - Edit mode: edits Basics (name/kind/orbit host/orbit position/notes) + Environment + Terraform.
+//   Details + Attributes remain read-only for now.
 //
 // Locked rules honored:
-// - No schema changes
-// - radial_order is sorting only; never shown to users
+// - Tree is built from system_objects
+// - radial_order is sorting only; NEVER shown to users (UI calls it "Orbit position")
 // - Orbit text is derived (never stored)
-// - Sidebar is minimal elsewhere; this modal shows the details
+// - No schema changes (this file only reads/writes existing columns)
 // ============================================================
 
 using System;
@@ -31,32 +32,42 @@ namespace StarMap2010.Ui
         Edit = 1
     }
 
-
-
     public sealed class ObjectEditorForm : Form
     {
         private readonly string _dbPath;
         private readonly SystemObjectInfo _obj;
         private readonly ObjectEditorMode _mode;
-        private readonly List<SystemObjectInfo> _all; // may be null
+        private readonly List<SystemObjectInfo> _all; // may be null (same-system objects)
 
-        // UI
+        // UI (common)
         private Label _hdr;
         private TabControl _tabs;
 
+        // Basics tab
+        private TextBox _txtName;
+        private ComboBox _cmbKind;
+        private ComboBox _cmbHost;
+        private NumericUpDown _numOrbitPos;
+        private TextBox _txtNotes;
+
+        // Summary + tabs
         private TextBox _txtSummary;
         private DataGridView _gridDetails;
         private DataGridView _gridEnv;
         private DataGridView _gridTerraform;
         private DataGridView _gridAttrs;
 
+        // Footer
         private Button _btnPrimary;
         private Button _btnCancel;
 
-        private DataTable _dtEnvEdit;
-        private DataTable _dtTerEdit;
-
-
+        // Internal (for host dropdown)
+        private sealed class ComboItem
+        {
+            public string Id;
+            public string Text;
+            public override string ToString() { return Text ?? ""; }
+        }
 
         public ObjectEditorForm(string dbPath, SystemObjectInfo obj, ObjectEditorMode mode, List<SystemObjectInfo> all)
         {
@@ -73,7 +84,6 @@ namespace StarMap2010.Ui
             BuildUi();
             ApplyMode();
 
-            // Load DB-backed tables now
             LoadAndBindTables();
         }
 
@@ -102,6 +112,11 @@ namespace StarMap2010.Ui
             _tabs = new TabControl { Dock = DockStyle.Fill };
             root.Controls.Add(_tabs, 0, 1);
 
+            // ---- Basics tab (edit-centric; still visible in view) ----
+            var tabBasics = new TabPage("Basics");
+            tabBasics.Controls.Add(BuildBasicsPanel());
+            _tabs.TabPages.Add(tabBasics);
+
             // ---- Summary tab ----
             var tabSummary = new TabPage("Summary");
             _txtSummary = new TextBox
@@ -117,25 +132,25 @@ namespace StarMap2010.Ui
             tabSummary.Controls.Add(_txtSummary);
             _tabs.TabPages.Add(tabSummary);
 
-            // ---- Details tab ----
+            // ---- Details tab ---- (planet_details or moon_details; read-only)
             var tabDetails = new TabPage("Details");
-            _gridDetails = MakeGridProps();
+            _gridDetails = MakeGridProps(false);
             tabDetails.Controls.Add(_gridDetails);
             _tabs.TabPages.Add(tabDetails);
 
             // ---- Environment tab ----
             var tabEnv = new TabPage("Environment");
-            _gridEnv = MakeGridProps();
+            _gridEnv = MakeGridProps(true);
             tabEnv.Controls.Add(_gridEnv);
             _tabs.TabPages.Add(tabEnv);
 
             // ---- Terraform tab ----
             var tabTerraform = new TabPage("Terraform");
-            _gridTerraform = MakeGridProps();
+            _gridTerraform = MakeGridProps(true);
             tabTerraform.Controls.Add(_gridTerraform);
             _tabs.TabPages.Add(tabTerraform);
 
-            // ---- Attributes tab ---- (friendly 2-column)
+            // ---- Attributes tab ---- (read-only friendly 2-column)
             var tabAttrs = new TabPage("Attributes");
             _gridAttrs = MakeGridAttrs();
             tabAttrs.Controls.Add(_gridAttrs);
@@ -174,31 +189,21 @@ namespace StarMap2010.Ui
                     return;
                 }
 
+                // Edit mode: persist changes
                 try
                 {
-                    using (var conn = new SQLiteConnection("Data Source=" + _dbPath + ";Version=3;"))
-                    {
-                        conn.Open();
-                        using (var tx = conn.BeginTransaction())
-                        {
-                            SaveEnvironment(conn, tx);
-                            SaveTerraform(conn, tx);
-                            tx.Commit();
-                        }
-                    }
-
+                    SaveAll();
                     DialogResult = DialogResult.OK;
                     Close();
                 }
                 catch (Exception ex)
                 {
                     MessageBox.Show(
-                        "Save failed:\r\n" + ex.Message,
-                        "Error",
+                        "Save failed:\r\n\r\n" + ex.Message,
+                        "Save Failed",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Error);
                 }
-
             };
 
             buttons.Controls.Add(_btnCancel);
@@ -208,38 +213,156 @@ namespace StarMap2010.Ui
             root.Controls.Add(buttons, 0, 2);
 
             RenderHeaderAndSummary();
+            LoadBasicsFromObject();
         }
 
-        private static DataGridView MakeGrid()
+        private Control BuildBasicsPanel()
+        {
+            // Layout: two columns (labels / inputs), with Notes spanning full width.
+            var pnl = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 2,
+                RowCount = 6,
+                Padding = new Padding(8)
+            };
+            pnl.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140));
+            pnl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            pnl.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // name
+            pnl.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // kind
+            pnl.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // host
+            pnl.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // orbit pos
+            pnl.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // notes label
+            pnl.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); // notes box
+
+            // Name
+            pnl.Controls.Add(MakeLabel("Display name"), 0, 0);
+            _txtName = new TextBox { Dock = DockStyle.Top };
+            pnl.Controls.Add(_txtName, 1, 0);
+
+            // Kind
+            pnl.Controls.Add(MakeLabel("Object kind"), 0, 1);
+            _cmbKind = new ComboBox
+            {
+                Dock = DockStyle.Top,
+                DropDownStyle = ComboBoxStyle.DropDownList
+            };
+            _cmbKind.Items.AddRange(new object[]
+            {
+                "planet","moon","dwarf_planet","star","system_root","belt","asteroid_belt","kuiper_belt","oort_cloud",
+                "station","installation","gate_facility","ring_system"
+            });
+            pnl.Controls.Add(_cmbKind, 1, 1);
+
+            // Orbit host
+            pnl.Controls.Add(MakeLabel("Orbit host"), 0, 2);
+            _cmbHost = new ComboBox
+            {
+                Dock = DockStyle.Top,
+                DropDownStyle = ComboBoxStyle.DropDownList
+            };
+            pnl.Controls.Add(_cmbHost, 1, 2);
+
+            // Orbit position (sorting)
+            pnl.Controls.Add(MakeLabel("Orbit position"), 0, 3);
+            _numOrbitPos = new NumericUpDown
+            {
+                Dock = DockStyle.Left,
+                Width = 120,
+                Minimum = -9999,
+                Maximum = 9999,
+                Increment = 1
+            };
+            var hint = new Label
+            {
+                AutoSize = true,
+                Text = "Controls ordering only (orbit text is derived).",
+                ForeColor = SystemColors.GrayText,
+                Padding = new Padding(10, 6, 0, 0)
+            };
+            var orbitWrap = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                AutoSize = true
+            };
+            orbitWrap.Controls.Add(_numOrbitPos);
+            orbitWrap.Controls.Add(hint);
+            pnl.Controls.Add(orbitWrap, 1, 3);
+
+            // Notes
+            pnl.Controls.Add(MakeLabel("Notes"), 0, 4);
+            _txtNotes = new TextBox
+            {
+                Dock = DockStyle.Fill,
+                Multiline = true,
+                ScrollBars = ScrollBars.Vertical
+            };
+            pnl.Controls.Add(_txtNotes, 0, 5);
+            pnl.SetColumnSpan(_txtNotes, 2);
+
+            return pnl;
+        }
+
+        private static Label MakeLabel(string text)
+        {
+            return new Label
+            {
+                AutoSize = true,
+                Text = text ?? "",
+                Padding = new Padding(0, 6, 0, 0)
+            };
+        }
+
+        private static DataGridView MakeGridBase()
         {
             return new DataGridView
             {
                 Dock = DockStyle.Fill,
-                ReadOnly = true,
                 AllowUserToAddRows = false,
                 AllowUserToDeleteRows = false,
                 AllowUserToResizeRows = false,
                 MultiSelect = false,
-                SelectionMode = DataGridViewSelectionMode.FullRowSelect,
-                AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
                 BackgroundColor = Color.White,
-                BorderStyle = BorderStyle.FixedSingle
+                BorderStyle = BorderStyle.FixedSingle,
+                RowHeadersVisible = false,
+                AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
+                AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.DisplayedCellsExceptHeaders
             };
         }
 
-        // 2-column "Field / Value" presentation
-        private static DataGridView MakeGridProps()
+        // 2-column "Field / Value" presentation. In edit mode we edit Value with single click.
+        private DataGridView MakeGridProps(bool canEditInEditMode)
         {
-            var g = MakeGrid();
-            g.RowHeadersVisible = false;
+            var g = MakeGridBase();
+
+            g.SelectionMode = DataGridViewSelectionMode.CellSelect;
+            g.EditMode = DataGridViewEditMode.EditOnEnter;
+            g.ReadOnly = true; // toggled in ApplyMode()
+
+            // Better feel: clicking the Value cell immediately edits (EditOnEnter handles this)
+            g.CellClick += delegate(object sender, DataGridViewCellEventArgs e)
+            {
+                if (_mode != ObjectEditorMode.Edit) return;
+                if (!canEditInEditMode) return;
+                if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
+
+                var grid = (DataGridView)sender;
+                if (grid.Columns[e.ColumnIndex].Name == "Value")
+                {
+                    grid.CurrentCell = grid.Rows[e.RowIndex].Cells[e.ColumnIndex];
+                    grid.BeginEdit(true);
+                }
+            };
+
             return g;
         }
 
-        // 2-column "Attribute / Value" presentation
+        // 2-column "Attribute / Value" presentation (read-only)
         private static DataGridView MakeGridAttrs()
         {
-            var g = MakeGrid();
-            g.RowHeadersVisible = false;
+            var g = MakeGridBase();
+            g.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+            g.ReadOnly = true;
             return g;
         }
 
@@ -267,8 +390,146 @@ namespace StarMap2010.Ui
                 "Orbit: " + orbitPhrase + "\r\n" +
                 "Notes: " + FirstLine(_obj.Notes) + "\r\n" +
                 "\r\n" +
-                "Tip: Double-click or right-click → View… from the tree.\r\n" +
-                "Tabs: Details / Environment / Terraform / Attributes are DB-backed.";
+                "Edit tips:\r\n" +
+                "- Basics: edit name/kind/orbit host/orbit position/notes\r\n" +
+                "- Environment/Terraform: click the Value cell to edit\r\n" +
+                "- Details/Attributes: read-only for now";
+        }
+
+        private void LoadBasicsFromObject()
+        {
+            if (_obj == null) return;
+
+            // Name
+            _txtName.Text = _obj.DisplayName ?? "";
+
+            // Kind
+            string kind = (_obj.ObjectKind ?? "").Trim();
+            int idx = _cmbKind.FindStringExact(kind);
+            if (idx >= 0) _cmbKind.SelectedIndex = idx;
+            else
+            {
+                if (kind.Length > 0) _cmbKind.Items.Add(kind);
+                _cmbKind.SelectedItem = kind;
+            }
+
+            // Host dropdown
+            PopulateHostDropdown();
+            SelectHostInDropdown(FirstNonEmpty(_obj.OrbitHostObjectId, _obj.ParentObjectId));
+
+            // Orbit position (sorting only)
+            try { _numOrbitPos.Value = _obj.RadialOrder; }
+            catch { _numOrbitPos.Value = 0; }
+
+            // Notes
+            _txtNotes.Text = _obj.Notes ?? "";
+        }
+
+        private void PopulateHostDropdown()
+        {
+            _cmbHost.Items.Clear();
+
+            // Top option: none
+            _cmbHost.Items.Add(new ComboItem { Id = "", Text = "(none)" });
+
+            if (_all == null || _all.Count == 0 || _obj == null)
+            {
+                _cmbHost.SelectedIndex = 0;
+                return;
+            }
+
+            // Add all other objects as potential hosts (conservative; you can filter later)
+            for (int i = 0; i < _all.Count; i++)
+            {
+                var o = _all[i];
+                if (o == null) continue;
+                if (string.Equals(o.ObjectId, _obj.ObjectId, StringComparison.Ordinal)) continue;
+
+                string text = (o.DisplayName ?? "").Trim();
+                if (text.Length == 0) text = "(unnamed)";
+                string okind = (o.ObjectKind ?? "").Trim();
+                if (okind.Length > 0) text += " [" + okind + "]";
+
+                _cmbHost.Items.Add(new ComboItem { Id = o.ObjectId, Text = text });
+            }
+
+            _cmbHost.SelectedIndex = 0;
+        }
+
+        private void SelectHostInDropdown(string hostId)
+        {
+            if (string.IsNullOrWhiteSpace(hostId))
+            {
+                _cmbHost.SelectedIndex = 0;
+                return;
+            }
+
+            for (int i = 0; i < _cmbHost.Items.Count; i++)
+            {
+                var it = _cmbHost.Items[i] as ComboItem;
+                if (it != null && string.Equals(it.Id, hostId, StringComparison.Ordinal))
+                {
+                    _cmbHost.SelectedIndex = i;
+                    return;
+                }
+            }
+
+            _cmbHost.SelectedIndex = 0;
+        }
+
+        private void ApplyMode()
+        {
+            bool isView = (_mode == ObjectEditorMode.View);
+
+            // Basics controls
+            bool basicsEditable = !isView;
+            if (_txtName != null) _txtName.ReadOnly = !basicsEditable;
+            if (_txtNotes != null) _txtNotes.ReadOnly = !basicsEditable;
+            if (_cmbKind != null) _cmbKind.Enabled = basicsEditable;
+            if (_cmbHost != null) _cmbHost.Enabled = basicsEditable;
+            if (_numOrbitPos != null) _numOrbitPos.Enabled = basicsEditable;
+
+            // Grids
+            if (_gridDetails != null) _gridDetails.ReadOnly = true; // always for now
+
+            // Env/Terraform are editable in edit mode but keep same look as view
+            if (_gridEnv != null) _gridEnv.ReadOnly = isView;
+            if (_gridTerraform != null) _gridTerraform.ReadOnly = isView;
+
+            if (isView)
+            {
+                if (_btnPrimary != null)
+                {
+                    _btnPrimary.Text = "Close";
+                    _btnPrimary.Enabled = true;
+                    _btnPrimary.DialogResult = DialogResult.OK;
+                }
+
+                if (_btnCancel != null)
+                    _btnCancel.Visible = false;
+
+                AcceptButton = _btnPrimary;
+                CancelButton = _btnPrimary;
+            }
+            else
+            {
+                if (_btnPrimary != null)
+                {
+                    _btnPrimary.Text = "Save";
+                    _btnPrimary.Enabled = true;
+                    _btnPrimary.DialogResult = DialogResult.None;
+                }
+
+                if (_btnCancel != null)
+                {
+                    _btnCancel.Text = "Cancel";
+                    _btnCancel.Visible = true;
+                    _btnCancel.DialogResult = DialogResult.Cancel;
+                }
+
+                AcceptButton = _btnPrimary;
+                CancelButton = _btnCancel;
+            }
         }
 
         private void LoadAndBindTables()
@@ -289,10 +550,6 @@ namespace StarMap2010.Ui
             {
                 string kind = (_obj.ObjectKind ?? "").Trim().ToLowerInvariant();
 
-                EnsureRowExists("body_environment", _obj.ObjectId);
-                EnsureRowExists("terraform_constraints", _obj.ObjectId);
-
-
                 // 1) Details (planet_details OR moon_details OR minimal)
                 DataTable dtDetails;
                 if (kind == "planet" || kind == "dwarf_planet")
@@ -304,38 +561,13 @@ namespace StarMap2010.Ui
 
                 BindOneRowAsFriendlyProperties(_gridDetails, dtDetails, DetailsOrder);
 
-
                 // 2) Environment
-                _dtEnvEdit = QueryTable("SELECT * FROM body_environment WHERE object_id = @id;", _obj.ObjectId);
-
-                if (_mode == ObjectEditorMode.Edit)
-                {
-                    _gridEnv.ReadOnly = false;
-                    _gridEnv.DataSource = _dtEnvEdit;
-                    HideRawColumns(_gridEnv);
-                }
-                else
-                {
-                    _gridEnv.ReadOnly = true;
-                    BindOneRowAsFriendlyProperties(_gridEnv, _dtEnvEdit, EnvironmentOrder);
-                }
+                var dtEnv = QueryTable("SELECT * FROM body_environment WHERE object_id = @id;", _obj.ObjectId);
+                BindOneRowAsFriendlyProperties(_gridEnv, dtEnv, EnvironmentOrder);
 
                 // 3) Terraform constraints
-                _dtTerEdit = QueryTable("SELECT * FROM terraform_constraints WHERE object_id = @id;", _obj.ObjectId);
-
-                if (_mode == ObjectEditorMode.Edit)
-                {
-                    _gridTerraform.ReadOnly = false;
-                    _gridTerraform.DataSource = _dtTerEdit;
-                    HideRawColumns(_gridTerraform);
-                }
-                else
-                {
-                    _gridTerraform.ReadOnly = true;
-                    BindOneRowAsFriendlyProperties(_gridTerraform, _dtTerEdit, TerraformOrder);
-                }
-
-
+                var dtTer = QueryTable("SELECT * FROM terraform_constraints WHERE object_id = @id;", _obj.ObjectId);
+                BindOneRowAsFriendlyProperties(_gridTerraform, dtTer, TerraformOrder);
 
                 // 4) Attributes (join to dictionary for display)
                 var dtAttrsRaw = QueryTable(
@@ -356,6 +588,11 @@ namespace StarMap2010.Ui
                     _obj.ObjectId);
 
                 BindAttributesCollapsed(dtAttrsRaw);
+
+                // Ensure Field column cannot be edited
+                LockFieldColumn(_gridEnv);
+                LockFieldColumn(_gridTerraform);
+                LockFieldColumn(_gridDetails);
             }
             catch (Exception ex)
             {
@@ -364,6 +601,17 @@ namespace StarMap2010.Ui
                 BindPropsEmpty(_gridTerraform, "Load failed: " + ex.Message);
                 BindAttrsEmpty("Load failed: " + ex.Message);
             }
+        }
+
+        private static void LockFieldColumn(DataGridView g)
+        {
+            if (g == null) return;
+            try
+            {
+                if (g.Columns.Contains("Field")) g.Columns["Field"].ReadOnly = true;
+                if (g.Columns.Contains("__col")) g.Columns["__col"].ReadOnly = true;
+            }
+            catch { }
         }
 
         private DataTable QueryTable(string sql, string objectId)
@@ -396,12 +644,12 @@ namespace StarMap2010.Ui
 
             if (dt.Rows.Count > 1)
             {
-                // Rare for our current detail tables; show raw
                 grid.DataSource = dt;
                 return;
             }
 
             var props = new DataTable();
+            props.Columns.Add("__col", typeof(string)); // internal column name (hidden)
             props.Columns.Add("Field", typeof(string));
             props.Columns.Add("Value", typeof(string));
 
@@ -448,19 +696,23 @@ namespace StarMap2010.Ui
                 string val = FriendlyValue(col, r[col]);
                 if (val == null) continue;
 
-                props.Rows.Add(FriendlyFieldLabel(col), val);
+                var row = props.NewRow();
+                row["__col"] = col;
+                row["Field"] = FriendlyFieldLabel(col);
+                row["Value"] = val;
+                props.Rows.Add(row);
             }
 
             // Notes rule: short = near top, long = bottom
             if (!string.IsNullOrWhiteSpace(notesValue))
             {
                 var notesRow = props.NewRow();
-                notesRow[0] = "Notes";
-                notesRow[1] = notesValue.Trim();
+                notesRow["__col"] = "notes";
+                notesRow["Field"] = "Notes";
+                notesRow["Value"] = notesValue.Trim();
 
                 if (notesValue.Length <= NotesShortLimit)
                 {
-                    // Put right after Class if present, otherwise at top
                     int insertAt = 0;
                     for (int i = 0; i < props.Rows.Count; i++)
                     {
@@ -481,13 +733,22 @@ namespace StarMap2010.Ui
 
             grid.DataSource = props;
 
+            // Hide internal column (always)
+            if (grid.Columns.Contains("__col"))
+                grid.Columns["__col"].Visible = false;
+
             if (grid.Columns.Count >= 2)
             {
-                grid.Columns[0].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
-                grid.Columns[1].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
+                if (grid.Columns.Contains("Field"))
+                    grid.Columns["Field"].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
+
+                if (grid.Columns.Contains("Value"))
+                {
+                    grid.Columns["Value"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
+                    grid.Columns["Value"].DefaultCellStyle.WrapMode = DataGridViewTriState.True;
+                }
             }
         }
-
 
         private void BindAttributesCollapsed(DataTable dtAttrsRaw)
         {
@@ -520,7 +781,6 @@ namespace StarMap2010.Ui
                 if (string.IsNullOrWhiteSpace(name))
                     name = "(unnamed)";
 
-                // If no usable value, skip (reduces noise)
                 if (string.IsNullOrWhiteSpace(value) || value == "-")
                     continue;
 
@@ -543,7 +803,7 @@ namespace StarMap2010.Ui
         private static string CollapseValueUnitsNotes(string value, string units, string notes)
         {
             var sb = new StringBuilder();
-            sb.Append(value.Trim());
+            sb.Append((value ?? "").Trim());
 
             if (!string.IsNullOrWhiteSpace(units))
                 sb.Append(" ").Append(units.Trim());
@@ -584,13 +844,11 @@ namespace StarMap2010.Ui
                 return Convert.ToString(vBool, CultureInfo.InvariantCulture);
             }
 
-            // fallback hint: value_kind exists but no value set
             if (!string.IsNullOrWhiteSpace(valueKind))
                 return "-";
 
             return "-";
         }
-
 
         private static void BindPropsEmpty(DataGridView grid, string msg)
         {
@@ -630,43 +888,131 @@ namespace StarMap2010.Ui
             return dt;
         }
 
-        // ---------- Mode ----------
+        // ---------- Save ----------
 
-        private void ApplyMode()
+        private void SaveAll()
         {
-            if (_mode == ObjectEditorMode.View)
+            if (_obj == null) throw new InvalidOperationException("No object.");
+            if (string.IsNullOrWhiteSpace(_dbPath)) throw new InvalidOperationException("No DB path.");
+
+            using (var conn = new SQLiteConnection("Data Source=" + _dbPath + ";Version=3;"))
             {
-                if (_btnPrimary != null)
+                conn.Open();
+
+                using (var tx = conn.BeginTransaction())
                 {
-                    _btnPrimary.Text = "Close";
-                    _btnPrimary.Enabled = true;
-                    _btnPrimary.DialogResult = DialogResult.OK;
+                    SaveSystemObject(conn, tx);
+                    SavePropsTable(conn, tx, "body_environment", "object_id", _obj.ObjectId, _gridEnv);
+                    SavePropsTable(conn, tx, "terraform_constraints", "object_id", _obj.ObjectId, _gridTerraform);
+
+                    tx.Commit();
                 }
-
-                if (_btnCancel != null)
-                    _btnCancel.Visible = false;
-
-                AcceptButton = _btnPrimary;
-                CancelButton = _btnPrimary;
             }
-            else
+
+            // Refresh UI summary/header using updated in-memory object
+            RenderHeaderAndSummary();
+        }
+
+        private void SaveSystemObject(SQLiteConnection conn, SQLiteTransaction tx)
+        {
+            string newName = (_txtName != null) ? (_txtName.Text ?? "").Trim() : "";
+            if (newName.Length == 0) newName = _obj.DisplayName ?? "";
+
+            string newKind = (_cmbKind != null && _cmbKind.SelectedItem != null)
+                ? Convert.ToString(_cmbKind.SelectedItem)
+                : (_obj.ObjectKind ?? "");
+
+            string newNotes = (_txtNotes != null) ? (_txtNotes.Text ?? "") : (_obj.Notes ?? "");
+
+            string hostId = "";
+            if (_cmbHost != null && _cmbHost.SelectedItem != null)
             {
-                if (_btnPrimary != null)
+                var ci = _cmbHost.SelectedItem as ComboItem;
+                hostId = (ci != null) ? (ci.Id ?? "") : "";
+            }
+
+            int orbitPos = 0;
+            try { orbitPos = Convert.ToInt32(_numOrbitPos.Value); }
+            catch { orbitPos = _obj.RadialOrder; }
+
+            using (var cmd = new SQLiteCommand(
+                @"UPDATE system_objects
+                  SET display_name = @name,
+                      object_kind = @kind,
+                      orbit_host_object_id = @host,
+                      radial_order = @order,
+                      notes = @notes
+                  WHERE object_id = @id;", conn, tx))
+            {
+                cmd.Parameters.AddWithValue("@name", newName);
+                cmd.Parameters.AddWithValue("@kind", newKind);
+                cmd.Parameters.AddWithValue("@host", string.IsNullOrWhiteSpace(hostId) ? (object)DBNull.Value : hostId);
+                cmd.Parameters.AddWithValue("@order", orbitPos);
+                cmd.Parameters.AddWithValue("@notes", string.IsNullOrWhiteSpace(newNotes) ? (object)DBNull.Value : newNotes);
+                cmd.Parameters.AddWithValue("@id", _obj.ObjectId);
+                cmd.ExecuteNonQuery();
+            }
+
+            // Update in-memory object (so tree refresh uses it)
+            _obj.DisplayName = newName;
+            _obj.ObjectKind = newKind;
+            _obj.OrbitHostObjectId = string.IsNullOrWhiteSpace(hostId) ? null : hostId;
+            _obj.RadialOrder = orbitPos;
+            _obj.Notes = newNotes;
+        }
+
+        private static void SavePropsTable(SQLiteConnection conn, SQLiteTransaction tx, string tableName, string pkCol, string pkVal, DataGridView grid)
+        {
+            if (grid == null) return;
+            if (grid.DataSource == null) return;
+
+            var dt = grid.DataSource as DataTable;
+            if (dt == null) return;
+            if (!dt.Columns.Contains("__col") || !dt.Columns.Contains("Value")) return;
+
+            // Ensure row exists (INSERT OR IGNORE)
+            using (var ensure = new SQLiteCommand(
+                "INSERT OR IGNORE INTO " + tableName + " (" + pkCol + ") VALUES (@id);", conn, tx))
+            {
+                ensure.Parameters.AddWithValue("@id", pkVal);
+                ensure.ExecuteNonQuery();
+            }
+
+            // Update each edited field
+            for (int i = 0; i < dt.Rows.Count; i++)
+            {
+                var r = dt.Rows[i];
+                string col = Convert.ToString(r["__col"]);
+                if (string.IsNullOrWhiteSpace(col)) continue;
+                if (EqualsIgnore(col, pkCol)) continue;
+                if (ShouldHideColumn(col)) continue;
+
+                string value = Convert.ToString(r["Value"]);
+                object dbVal = (value == null) ? (object)DBNull.Value : (object)value;
+
+                // simple boolean normalization (0/1 columns; currently only tidally_locked)
+                if (EqualsIgnore(col, "tidally_locked"))
                 {
-                    _btnPrimary.Text = "Save";
-                    _btnPrimary.Enabled = true; // enabled, but stubbed
-                    _btnPrimary.DialogResult = DialogResult.None;
+                    if (value != null)
+                    {
+                        string v = value.Trim().ToLowerInvariant();
+                        if (v == "yes" || v == "true" || v == "1") dbVal = 1;
+                        else if (v == "no" || v == "false" || v == "0") dbVal = 0;
+                        else
+                        {
+                            int b;
+                            if (int.TryParse(value.Trim(), out b)) dbVal = (b != 0) ? 1 : 0;
+                        }
+                    }
                 }
 
-                if (_btnCancel != null)
+                using (var cmd = new SQLiteCommand(
+                    "UPDATE " + tableName + " SET " + col + " = @val WHERE " + pkCol + " = @id;", conn, tx))
                 {
-                    _btnCancel.Text = "Cancel";
-                    _btnCancel.Visible = true;
-                    _btnCancel.DialogResult = DialogResult.Cancel;
+                    cmd.Parameters.AddWithValue("@val", dbVal);
+                    cmd.Parameters.AddWithValue("@id", pkVal);
+                    cmd.ExecuteNonQuery();
                 }
-
-                AcceptButton = _btnPrimary;
-                CancelButton = _btnCancel;
             }
         }
 
@@ -718,9 +1064,6 @@ namespace StarMap2010.Ui
             if (string.IsNullOrWhiteSpace(snake))
                 return "-";
 
-            // small unit polish:
-            // radius_km -> Radius (km)
-            // semi_major_axis_au -> Semi major axis (AU)
             string s = snake.Trim();
             string unit = null;
 
@@ -761,7 +1104,6 @@ namespace StarMap2010.Ui
             if (!string.IsNullOrEmpty(unit))
                 s += " (" + unit + ")";
 
-            // a couple of nicer labels
             if (EqualsIgnore(snake, "env_stage")) return "Environment stage";
             if (EqualsIgnore(snake, "pressure_atm")) return "Pressure (atm)";
             if (EqualsIgnore(snake, "avg_temp_c")) return "Average temperature (°C)";
@@ -788,7 +1130,142 @@ namespace StarMap2010.Ui
             return string.Equals(a ?? "", b ?? "", StringComparison.OrdinalIgnoreCase);
         }
 
-        // ---------------- Orbit phrase helpers (existing logic you had) ----------------
+        // ------------------------------------------------------------
+        // Field ordering (DM-first) + Notes placement rule
+        // ------------------------------------------------------------
+
+        private const int NotesShortLimit = 120;
+
+        private static readonly string[] DetailsOrder = new[]
+        {
+            // What is it?
+            "planet_class", "moon_class",
+            "population",
+            "tech_level",
+
+            // Lived experience
+            "day_length_hours",
+            "tidally_locked",
+            "axial_tilt_deg",
+
+            // Calendar / orbit
+            "orbital_period_days",
+            "semi_major_axis_au",
+            "semi_major_axis_km",
+            "eccentricity",
+
+            // Hard stats (least narrative)
+            "gravity_g",
+            "radius_km",
+            "mass_earth",
+            "density_g_cm3",
+            "albedo"
+            // notes handled specially
+        };
+
+        private static readonly string[] EnvironmentOrder = new[]
+        {
+            // Can we live here?
+            "habitability",
+            "atmosphere_type",
+            "pressure_atm",
+            "avg_temp_c",
+            "hydrosphere_pct",
+            "biosphere",
+
+            // Threats / protection
+            "radiation_level",
+            "magnetosphere",
+
+            // Meta
+            "env_stage"
+            // notes handled specially
+        };
+
+        private static readonly string[] TerraformOrder = new[]
+        {
+            // Feasibility first
+            "terraform_tier",
+            "limiting_factors",
+            "requires_imports",
+
+            // Constraints
+            "water_availability",
+            "volatile_budget",
+            "atmosphere_retention",
+            "radiation_constraint",
+            "maintenance_burden"
+            // notes handled specially
+        };
+
+        private static int GetOrderRank(string[] order, string col)
+        {
+            if (order == null || string.IsNullOrWhiteSpace(col)) return 9999;
+
+            for (int i = 0; i < order.Length; i++)
+                if (EqualsIgnore(col, order[i])) return i;
+
+            return 9999;
+        }
+
+        private static string FriendlyFieldLabel(string col)
+        {
+            if (EqualsIgnore(col, "planet_class") || EqualsIgnore(col, "moon_class")) return "Class";
+            if (EqualsIgnore(col, "tidally_locked")) return "Tidally locked";
+            if (EqualsIgnore(col, "semi_major_axis_au")) return "Semi-major axis (AU)";
+            if (EqualsIgnore(col, "semi_major_axis_km")) return "Semi-major axis (km)";
+            if (EqualsIgnore(col, "axial_tilt_deg")) return "Axial tilt (°)";
+            if (EqualsIgnore(col, "day_length_hours")) return "Day length (hours)";
+            if (EqualsIgnore(col, "orbital_period_days")) return "Orbital period (days)";
+            if (EqualsIgnore(col, "avg_temp_c")) return "Avg temp (°C)";
+            if (EqualsIgnore(col, "pressure_atm")) return "Pressure (atm)";
+            if (EqualsIgnore(col, "hydrosphere_pct")) return "Hydrosphere (%)";
+            return HumanizeField(col);
+        }
+
+        private static string FriendlyValue(string col, object v)
+        {
+            if (v == null || v == DBNull.Value) return null;
+
+            string s = Convert.ToString(v, CultureInfo.InvariantCulture);
+            if (string.IsNullOrWhiteSpace(s)) return null;
+            s = s.Trim();
+
+            // Booleans stored as 0/1
+            if (EqualsIgnore(col, "tidally_locked"))
+            {
+                int b;
+                if (int.TryParse(s, out b))
+                    return (b != 0) ? "Yes" : "No";
+            }
+
+            return s;
+        }
+
+        private static bool ShouldHideColumn(string col)
+        {
+            if (string.IsNullOrWhiteSpace(col))
+                return true;
+
+            if (EqualsIgnore(col, "object_id"))
+                return true;
+
+            if (EqualsIgnore(col, "created_utc") || EqualsIgnore(col, "updated_utc"))
+                return true;
+
+            if (EndsWithIgnore(col, "_utc"))
+                return true;
+
+            if (EqualsIgnore(col, "radial_order"))
+                return true;
+
+            if (EqualsIgnore(col, "created_by") || EqualsIgnore(col, "updated_by"))
+                return true;
+
+            return false;
+        }
+
+        // ---------------- Orbit phrase helpers ----------------
 
         private static string DeriveOrbitPhrase_NoContext(SystemObjectInfo obj)
         {
@@ -983,273 +1460,5 @@ namespace StarMap2010.Ui
             if (!string.IsNullOrWhiteSpace(b)) return b.Trim();
             return null;
         }
-
-        // ------------------------------------------------------------
-        // Field ordering (DM-first) + Notes placement rule
-        // ------------------------------------------------------------
-
-        private const int NotesShortLimit = 120;
-
-        private static readonly string[] DetailsOrder = new[]
-{
-    // What is it?
-    "planet_class", "moon_class",
-    "population",
-    "tech_level",
-
-    // Lived experience
-    "day_length_hours",
-    "tidally_locked",
-    "axial_tilt_deg",
-
-    // Calendar / orbit
-    "orbital_period_days",
-    "semi_major_axis_au",
-    "semi_major_axis_km",
-    "eccentricity",
-
-    // Hard stats (least narrative)
-    "gravity_g",
-    "radius_km",
-    "mass_earth",
-    "density_g_cm3",
-    "albedo"
-
-    // notes handled specially
-};
-
-        private static readonly string[] EnvironmentOrder = new[]
-{
-    // Can we live here?
-    "habitability",
-    "atmosphere_type",
-    "pressure_atm",
-    "avg_temp_c",
-    "hydrosphere_pct",
-    "biosphere",
-
-    // Threats / protection
-    "radiation_level",
-    "magnetosphere",
-
-    // Meta
-    "env_stage"
-
-    // notes handled specially
-};
-
-        private static readonly string[] TerraformOrder = new[]
-{
-    // Feasibility first
-    "terraform_tier",
-    "limiting_factors",
-    "requires_imports",
-
-    // Constraints
-    "water_availability",
-    "volatile_budget",
-    "atmosphere_retention",
-    "radiation_constraint",
-    "maintenance_burden"
-
-    // notes handled specially
-};
-
-        private static int GetOrderRank(string[] order, string col)
-        {
-            if (order == null || string.IsNullOrWhiteSpace(col)) return 9999;
-
-            for (int i = 0; i < order.Length; i++)
-                if (EqualsIgnore(col, order[i])) return i;
-
-            return 9999;
-        }
-
-        private static string FriendlyFieldLabel(string col)
-        {
-            if (EqualsIgnore(col, "planet_class") || EqualsIgnore(col, "moon_class")) return "Class";
-            if (EqualsIgnore(col, "tidally_locked")) return "Tidally locked";
-            if (EqualsIgnore(col, "semi_major_axis_au")) return "Semi-major axis (AU)";
-            if (EqualsIgnore(col, "semi_major_axis_km")) return "Semi-major axis (km)";
-            if (EqualsIgnore(col, "axial_tilt_deg")) return "Axial tilt (°)";
-            if (EqualsIgnore(col, "day_length_hours")) return "Day length (hours)";
-            if (EqualsIgnore(col, "orbital_period_days")) return "Orbital period (days)";
-            if (EqualsIgnore(col, "avg_temp_c")) return "Avg temp (°C)";
-            if (EqualsIgnore(col, "pressure_atm")) return "Pressure (atm)";
-            if (EqualsIgnore(col, "hydrosphere_pct")) return "Hydrosphere (%)";
-            return HumanizeField(col);
-        }
-
-        private static string FriendlyValue(string col, object v)
-        {
-            if (v == null || v == DBNull.Value) return null;
-
-            string s = Convert.ToString(v, CultureInfo.InvariantCulture);
-            if (string.IsNullOrWhiteSpace(s)) return null;
-            s = s.Trim();
-
-            // Booleans stored as 0/1
-            if (EqualsIgnore(col, "tidally_locked"))
-            {
-                int b;
-                if (int.TryParse(s, out b))
-                    return (b != 0) ? "Yes" : "No";
-            }
-
-            return s;
-        }
-
-        private static bool ShouldHideColumn(string col)
-        {
-            if (string.IsNullOrWhiteSpace(col))
-                return true;
-
-            // Hard hides
-            if (EqualsIgnore(col, "object_id"))
-                return true;
-
-            // Timestamps / noise
-            if (EqualsIgnore(col, "created_utc") || EqualsIgnore(col, "updated_utc"))
-                return true;
-            if (EndsWithIgnore(col, "_utc"))
-                return true;
-
-            // Sorting-only / internal
-            if (EqualsIgnore(col, "radial_order"))
-                return true;
-
-            // Common internal IDs
-            if (EqualsIgnore(col, "created_by") || EqualsIgnore(col, "updated_by"))
-                return true;
-
-            return false;
-        }
-        private void EnsureRowExists(string tableName, string objectId)
-        {
-            if (string.IsNullOrWhiteSpace(tableName) || string.IsNullOrWhiteSpace(objectId))
-                return;
-
-            using (var conn = new SQLiteConnection("Data Source=" + _dbPath + ";Version=3;"))
-            using (var cmd = new SQLiteCommand(conn))
-            {
-                conn.Open();
-
-                cmd.CommandText = "SELECT COUNT(*) FROM " + tableName + " WHERE object_id = @id;";
-                cmd.Parameters.AddWithValue("@id", objectId);
-                long count = (long)cmd.ExecuteScalar();
-
-                if (count > 0) return;
-
-                cmd.Parameters.Clear();
-                cmd.CommandText = "INSERT INTO " + tableName + " (object_id) VALUES (@id);";
-                cmd.Parameters.AddWithValue("@id", objectId);
-                cmd.ExecuteNonQuery();
-            }
-        }
-
-        private static void HideRawColumns(DataGridView grid)
-        {
-            if (grid == null) return;
-
-            for (int i = 0; i < grid.Columns.Count; i++)
-            {
-                var c = grid.Columns[i];
-                if (c == null) continue;
-
-                string name = c.Name ?? c.DataPropertyName ?? "";
-                if (ShouldHideColumn(name))
-                    c.Visible = false;
-            }
-        }
-
-        private static object DbOrNull(object v)
-        {
-            if (v == null || v == DBNull.Value) return DBNull.Value;
-
-            var s = v as string;
-            if (s != null && string.IsNullOrWhiteSpace(s)) return DBNull.Value;
-
-            return v;
-        }
-
-        private void SaveEnvironment(SQLiteConnection conn, SQLiteTransaction tx)
-        {
-            if (_dtEnvEdit == null || _dtEnvEdit.Rows.Count == 0) return;
-
-            DataRow r = _dtEnvEdit.Rows[0];
-
-            using (var cmd = new SQLiteCommand(conn))
-            {
-                cmd.Transaction = tx;
-                cmd.CommandText =
-                    @"UPDATE body_environment SET
-                env_stage = @env_stage,
-                atmosphere_type = @atmosphere_type,
-                pressure_atm = @pressure_atm,
-                avg_temp_c = @avg_temp_c,
-                hydrosphere_pct = @hydrosphere_pct,
-                biosphere = @biosphere,
-                radiation_level = @radiation_level,
-                magnetosphere = @magnetosphere,
-                habitability = @habitability,
-                notes = @notes
-              WHERE object_id = @object_id;";
-
-                cmd.Parameters.AddWithValue("@object_id", _obj.ObjectId);
-
-                cmd.Parameters.AddWithValue("@env_stage", DbOrNull(r["env_stage"]));
-                cmd.Parameters.AddWithValue("@atmosphere_type", DbOrNull(r["atmosphere_type"]));
-                cmd.Parameters.AddWithValue("@pressure_atm", DbOrNull(r["pressure_atm"]));
-                cmd.Parameters.AddWithValue("@avg_temp_c", DbOrNull(r["avg_temp_c"]));
-                cmd.Parameters.AddWithValue("@hydrosphere_pct", DbOrNull(r["hydrosphere_pct"]));
-                cmd.Parameters.AddWithValue("@biosphere", DbOrNull(r["biosphere"]));
-                cmd.Parameters.AddWithValue("@radiation_level", DbOrNull(r["radiation_level"]));
-                cmd.Parameters.AddWithValue("@magnetosphere", DbOrNull(r["magnetosphere"]));
-                cmd.Parameters.AddWithValue("@habitability", DbOrNull(r["habitability"]));
-                cmd.Parameters.AddWithValue("@notes", DbOrNull(r["notes"]));
-
-                cmd.ExecuteNonQuery();
-            }
-        }
-
-        private void SaveTerraform(SQLiteConnection conn, SQLiteTransaction tx)
-        {
-            if (_dtTerEdit == null || _dtTerEdit.Rows.Count == 0) return;
-
-            DataRow r = _dtTerEdit.Rows[0];
-
-            using (var cmd = new SQLiteCommand(conn))
-            {
-                cmd.Transaction = tx;
-                cmd.CommandText =
-                    @"UPDATE terraform_constraints SET
-                terraform_tier = @terraform_tier,
-                atmosphere_retention = @atmosphere_retention,
-                radiation_constraint = @radiation_constraint,
-                volatile_budget = @volatile_budget,
-                water_availability = @water_availability,
-                requires_imports = @requires_imports,
-                limiting_factors = @limiting_factors,
-                maintenance_burden = @maintenance_burden,
-                notes = @notes
-              WHERE object_id = @object_id;";
-
-                cmd.Parameters.AddWithValue("@object_id", _obj.ObjectId);
-
-                cmd.Parameters.AddWithValue("@terraform_tier", DbOrNull(r["terraform_tier"]));
-                cmd.Parameters.AddWithValue("@atmosphere_retention", DbOrNull(r["atmosphere_retention"]));
-                cmd.Parameters.AddWithValue("@radiation_constraint", DbOrNull(r["radiation_constraint"]));
-                cmd.Parameters.AddWithValue("@volatile_budget", DbOrNull(r["volatile_budget"]));
-                cmd.Parameters.AddWithValue("@water_availability", DbOrNull(r["water_availability"]));
-                cmd.Parameters.AddWithValue("@requires_imports", DbOrNull(r["requires_imports"]));
-                cmd.Parameters.AddWithValue("@limiting_factors", DbOrNull(r["limiting_factors"]));
-                cmd.Parameters.AddWithValue("@maintenance_burden", DbOrNull(r["maintenance_burden"]));
-                cmd.Parameters.AddWithValue("@notes", DbOrNull(r["notes"]));
-
-                cmd.ExecuteNonQuery();
-            }
-        }
-
-
     }
 }
