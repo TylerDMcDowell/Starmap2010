@@ -169,6 +169,9 @@
     <EmbeddedResource Include="GovernmentEditorForm.resx">
       <DependentUpon>GovernmentEditorForm.cs</DependentUpon>
     </EmbeddedResource>
+    <EmbeddedResource Include="UI\ObjectEditorForm.resx">
+      <DependentUpon>ObjectEditorForm.cs</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="UI\WorldCardPanel.resx">
       <DependentUpon>WorldCardPanel.cs</DependentUpon>
     </EmbeddedResource>

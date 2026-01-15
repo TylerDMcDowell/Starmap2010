@@ -524,34 +524,13 @@ namespace StarMap2010
 
         private void Tree_Edit()
         {
-            if (_objDao == null) return;
-            if (selectedA == null || string.IsNullOrEmpty(selectedA.SystemId)) return;
-
             var cur = GetSelectedTreeObject();
             if (cur == null) return;
 
-            // Basic editor: keep hierarchy stable; just edit name/kind/order/notes
-            var t = new SystemObjectInfo();
-            t.ObjectId = cur.ObjectId;
-            t.SystemId = cur.SystemId;
-            t.ParentObjectId = cur.ParentObjectId;
-            t.OrbitHostObjectId = cur.OrbitHostObjectId;
-            t.ObjectKind = cur.ObjectKind;
-            t.RadialOrder = cur.RadialOrder;
-            t.DisplayName = cur.DisplayName;
-            t.Notes = cur.Notes;
-            t.RelatedTable = cur.RelatedTable;
-            t.RelatedId = cur.RelatedId;
-            t.Flags = cur.Flags;
-
-            using (var dlg = new SystemObjectEditorForm("Edit Object", t))
-            {
-                if (dlg.ShowDialog(this) != DialogResult.OK) return;
-                _objDao.Upsert(dlg.Result);
-            }
-
-            ReloadTreeAndReselect(cur.ObjectId);
+            // One-stop editing lives in ObjectEditorForm now.
+            OpenEditorForObject(cur);
         }
+
 
         private void Tree_Delete()
         {
