@@ -64,6 +64,10 @@ namespace StarMap2010.Ui
         private DataGridView _gridTerraform;
         private DataGridView _gridAttrs;
 
+        private FlowLayoutPanel _pnlOrbitBtns;
+        private FlowLayoutPanel _pnlHelpWrap;
+        private TableLayoutPanel _pnlOrbitWrap;
+
         private Button _btnPrimary;
         private Button _btnCancel;
 
@@ -274,28 +278,28 @@ namespace StarMap2010.Ui
             // Orbit order (sorting only; radial_order is never shown)
             pnl.Controls.Add(MakeLabel("Orbit order"), 0, 3);
 
-            var orbitWrap = new TableLayoutPanel
+            _pnlOrbitWrap = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
                 ColumnCount = 2,
                 RowCount = 3,
                 Margin = new Padding(0)
             };
-            orbitWrap.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            orbitWrap.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
-            orbitWrap.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            orbitWrap.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            orbitWrap.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            _pnlOrbitWrap.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            _pnlOrbitWrap.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
+            _pnlOrbitWrap.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            _pnlOrbitWrap.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            _pnlOrbitWrap.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
             _lstOrbitOrder = new ListBox
             {
                 Dock = DockStyle.Fill,
                 IntegralHeight = false
             };
-            orbitWrap.Controls.Add(_lstOrbitOrder, 0, 0);
-            orbitWrap.SetRowSpan(_lstOrbitOrder, 3);
+            _pnlOrbitWrap.Controls.Add(_lstOrbitOrder, 0, 0);
+            _pnlOrbitWrap.SetRowSpan(_lstOrbitOrder, 3);
 
-            var orbitBtns = new FlowLayoutPanel
+            _pnlOrbitBtns = new FlowLayoutPanel
             {
                 Dock = DockStyle.Fill,
                 FlowDirection = FlowDirection.TopDown,
@@ -306,10 +310,10 @@ namespace StarMap2010.Ui
 
             _btnOrbitUp = new Button { Text = "Up", Width = 90, Height = 28 };
             _btnOrbitDown = new Button { Text = "Down", Width = 90, Height = 28 };
-            orbitBtns.Controls.Add(_btnOrbitUp);
-            orbitBtns.Controls.Add(_btnOrbitDown);
+            _pnlOrbitBtns.Controls.Add(_btnOrbitUp);
+            _pnlOrbitBtns.Controls.Add(_btnOrbitDown);
 
-            orbitWrap.Controls.Add(orbitBtns, 1, 0);
+            _pnlOrbitWrap.Controls.Add(_pnlOrbitBtns, 1, 0);
 
             // Host move target list (drag an orbiter onto a host to change orbit_host_object_id)
             _lstOrbitHosts = new ListBox
@@ -317,7 +321,7 @@ namespace StarMap2010.Ui
                 Dock = DockStyle.Fill,
                 IntegralHeight = false
             };
-            orbitWrap.Controls.Add(_lstOrbitHosts, 1, 1);
+            _pnlOrbitWrap.Controls.Add(_lstOrbitHosts, 1, 1);
 
             _lblOrbitHelp = new Label
             {
@@ -333,7 +337,7 @@ namespace StarMap2010.Ui
                 Visible = false
             };
 
-            var helpWrap = new FlowLayoutPanel
+            _pnlHelpWrap = new FlowLayoutPanel
             {
                 AutoSize = true,
                 FlowDirection = FlowDirection.TopDown,
@@ -342,13 +346,13 @@ namespace StarMap2010.Ui
                 Margin = new Padding(0)
                 // DO NOT Dock = Bottom here
             };
-            helpWrap.Controls.Add(_lblOrbitHelp);
-            helpWrap.Controls.Add(_lblOrbitToast);
+            _pnlHelpWrap.Controls.Add(_lblOrbitHelp);
+            _pnlHelpWrap.Controls.Add(_lblOrbitToast);
 
             // Put help+toast under the hosts list by spanning (simpler than extra rows)
-            orbitWrap.Controls.Add(helpWrap, 1, 1);
-            helpWrap.BringToFront();
-            pnl.Controls.Add(orbitWrap, 1, 3);
+            _pnlOrbitWrap.Controls.Add(_pnlHelpWrap, 1, 1);
+            _pnlHelpWrap.BringToFront();
+            pnl.Controls.Add(_pnlOrbitWrap, 1, 3);
 
             // Notes under (full-width)
             var notesWrap = new TableLayoutPanel
@@ -489,6 +493,9 @@ namespace StarMap2010.Ui
             if (_lstOrbitOrder != null) _lstOrbitOrder.Enabled = basicsEditable;
             if (_btnOrbitUp != null) _btnOrbitUp.Enabled = basicsEditable;
             if (_btnOrbitDown != null) _btnOrbitDown.Enabled = basicsEditable;
+            if (_pnlOrbitBtns != null) _pnlOrbitBtns.Visible = basicsEditable;
+            if (_lstOrbitHosts != null) _lstOrbitHosts.Visible = basicsEditable;
+            if (_lblOrbitHelp != null) _lblOrbitHelp.Visible = basicsEditable;
 
             if (_btnPrimary != null)
             {
