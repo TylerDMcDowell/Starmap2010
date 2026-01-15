@@ -52,6 +52,11 @@ namespace StarMap2010.Ui
         private Button _btnOrbitDown;
         private Label _lblOrbitHelp;
 
+
+        private ListBox _lstOrbitHosts;
+        private Label _lblOrbitToast;
+        private Timer _orbitToastTimer;
+        private HashSet<string> _dirtyOrbitHosts = new HashSet<string>(StringComparer.Ordinal);
         // Tabs
         private TextBox _txtSummary;
         private DataGridView _gridDetails;
@@ -110,7 +115,7 @@ namespace StarMap2010.Ui
             {
                 Dock = DockStyle.Fill,
                 ColumnCount = 1,
-                RowCount = 2,
+                RowCount = 3,
                 Padding = new Padding(8)
             };
             sumWrap.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -273,11 +278,12 @@ namespace StarMap2010.Ui
             {
                 Dock = DockStyle.Fill,
                 ColumnCount = 2,
-                RowCount = 2,
+                RowCount = 3,
                 Margin = new Padding(0)
             };
             orbitWrap.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             orbitWrap.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
+            orbitWrap.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             orbitWrap.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             orbitWrap.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
@@ -287,7 +293,7 @@ namespace StarMap2010.Ui
                 IntegralHeight = false
             };
             orbitWrap.Controls.Add(_lstOrbitOrder, 0, 0);
-            orbitWrap.SetRowSpan(_lstOrbitOrder, 2);
+            orbitWrap.SetRowSpan(_lstOrbitOrder, 3);
 
             var orbitBtns = new FlowLayoutPanel
             {
@@ -305,14 +311,43 @@ namespace StarMap2010.Ui
 
             orbitWrap.Controls.Add(orbitBtns, 1, 0);
 
+            // Host move target list (drag an orbiter onto a host to change orbit_host_object_id)
+            _lstOrbitHosts = new ListBox
+            {
+                Dock = DockStyle.Fill,
+                IntegralHeight = false
+            };
+            orbitWrap.Controls.Add(_lstOrbitHosts, 1, 1);
+
             _lblOrbitHelp = new Label
             {
                 AutoSize = true,
                 ForeColor = SystemColors.GrayText,
-                Text = "Drag to reorder (Edit mode)."
+                Text = "Drag to reorder. Drag onto a host (right) to move between hosts."
             };
-            orbitWrap.Controls.Add(_lblOrbitHelp, 1, 1);
 
+            _lblOrbitToast = new Label
+            {
+                AutoSize = true,
+                ForeColor = Color.FromArgb(0, 110, 0),
+                Visible = false
+            };
+
+            var helpWrap = new FlowLayoutPanel
+            {
+                AutoSize = true,
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                Padding = new Padding(0),
+                Margin = new Padding(0)
+                // DO NOT Dock = Bottom here
+            };
+            helpWrap.Controls.Add(_lblOrbitHelp);
+            helpWrap.Controls.Add(_lblOrbitToast);
+
+            // Put help+toast under the hosts list by spanning (simpler than extra rows)
+            orbitWrap.Controls.Add(helpWrap, 1, 1);
+            helpWrap.BringToFront();
             pnl.Controls.Add(orbitWrap, 1, 3);
 
             // Notes under (full-width)
@@ -321,7 +356,7 @@ namespace StarMap2010.Ui
                 Dock = DockStyle.Top,
                 AutoSize = true,
                 ColumnCount = 2,
-                RowCount = 2,
+                RowCount = 3,
                 Padding = new Padding(0),
                 Margin = new Padding(0, 8, 0, 0)
             };
@@ -361,11 +396,20 @@ namespace StarMap2010.Ui
                 _lstOrbitOrder.AllowDrop = true;
             }
 
+
+
+            if (_lstOrbitHosts != null)
+            {
+                _lstOrbitHosts.AllowDrop = true;
+                _lstOrbitHosts.DragEnter += OrbitHosts_DragEnter;
+                _lstOrbitHosts.DragOver += OrbitHosts_DragOver;
+                _lstOrbitHosts.DragDrop += OrbitHosts_DragDrop;
+            }
             if (_btnOrbitUp != null) _btnOrbitUp.Click += (s, e) => MoveOrbitSelection(-1);
             if (_btnOrbitDown != null) _btnOrbitDown.Click += (s, e) => MoveOrbitSelection(1);
 
             if (_cmbHost != null)
-                _cmbHost.SelectedIndexChanged += (s, e) => RefreshOrbitOrderList();
+                _cmbHost.SelectedIndexChanged += (s, e) => { RefreshOrbitHostsList(); RefreshOrbitOrderList(); };
 
             return outer;
         }
@@ -510,6 +554,7 @@ namespace StarMap2010.Ui
 
             PopulateHostDropdown();
             SelectHostInDropdown(FirstNonEmpty(_obj.OrbitHostObjectId, _obj.ParentObjectId));
+            RefreshOrbitHostsList();
 
             // Orbit order list
             RefreshOrbitOrderList();
@@ -545,6 +590,40 @@ namespace StarMap2010.Ui
 
             _cmbHost.SelectedIndex = 0;
         }
+
+
+        private void RefreshOrbitHostsList()
+        {
+            if (_lstOrbitHosts == null || _cmbHost == null) return;
+
+            _lstOrbitHosts.Items.Clear();
+
+            for (int i = 0; i < _cmbHost.Items.Count; i++)
+            {
+                var ci = _cmbHost.Items[i] as ComboItem;
+                if (ci == null) continue;
+                _lstOrbitHosts.Items.Add(new ComboItem { Id = ci.Id, Text = ci.Text });
+            }
+
+            // Keep selection in sync with Orbit host dropdown
+            if (_cmbHost.SelectedItem != null)
+            {
+                var sel = _cmbHost.SelectedItem as ComboItem;
+                if (sel != null)
+                {
+                    for (int i = 0; i < _lstOrbitHosts.Items.Count; i++)
+                    {
+                        var it = _lstOrbitHosts.Items[i] as ComboItem;
+                        if (it != null && string.Equals(it.Id ?? "", sel.Id ?? "", StringComparison.Ordinal))
+                        {
+                            _lstOrbitHosts.SelectedIndex = i;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
 
         private void SelectHostInDropdown(string hostId)
         {
@@ -917,7 +996,7 @@ namespace StarMap2010.Ui
                 using (var tx = conn.BeginTransaction())
                 {
                     SaveSystemObject(conn, tx);
-                    PersistOrbitOrder(conn, tx);
+                    PersistOrbitChanges(conn, tx);
                     SaveDetailsIfApplicable(conn, tx);
                     SavePropsTable(conn, tx, "body_environment", "object_id", _obj.ObjectId, _gridEnv);
                     SavePropsTable(conn, tx, "terraform_constraints", "object_id", _obj.ObjectId, _gridTerraform);
@@ -1468,6 +1547,7 @@ namespace StarMap2010.Ui
         private sealed class OrbitItem
         {
             public string Id;
+            public string HostId;
             public string Text;
             public override string ToString() { return Text ?? ""; }
         }
@@ -1479,7 +1559,7 @@ namespace StarMap2010.Ui
 
             if (_obj == null || _all == null || _all.Count == 0)
             {
-                _lstOrbitOrder.Items.Add(new OrbitItem { Id = _obj != null ? _obj.ObjectId : "", Text = "(no system context)" });
+                _lstOrbitOrder.Items.Add(new OrbitItem { Id = _obj != null ? _obj.ObjectId : "", HostId = "", Text = "(no system context)" });
                 _lstOrbitOrder.SelectedIndex = 0;
                 return;
             }
@@ -1530,7 +1610,7 @@ namespace StarMap2010.Ui
                 string k = (o.ObjectKind ?? "").Trim();
                 if (k.Length > 0) t += " [" + k + "]";
 
-                var item = new OrbitItem { Id = o.ObjectId, Text = t };
+                var item = new OrbitItem { Id = o.ObjectId, HostId = hostId, Text = t };
                 _lstOrbitOrder.Items.Add(item);
 
                 if (_obj != null && string.Equals(o.ObjectId, _obj.ObjectId, StringComparison.Ordinal))
@@ -1543,13 +1623,30 @@ namespace StarMap2010.Ui
                 if (t.Length == 0) t = "(unnamed)";
                 string k = (_obj.ObjectKind ?? "").Trim();
                 if (k.Length > 0) t += " [" + k + "]";
-                _lstOrbitOrder.Items.Add(new OrbitItem { Id = _obj.ObjectId, Text = t });
+                _lstOrbitOrder.Items.Add(new OrbitItem { Id = _obj.ObjectId, HostId = hostId, Text = t });
                 selectIndex = _lstOrbitOrder.Items.Count - 1;
             }
 
             if (_lstOrbitOrder.Items.Count > 0)
                 _lstOrbitOrder.SelectedIndex = (selectIndex >= 0) ? selectIndex : 0;
         }
+
+
+        private string GetSelectedHostId()
+        {
+            string hostId = "";
+            if (_cmbHost != null && _cmbHost.SelectedItem != null)
+            {
+                var ci = _cmbHost.SelectedItem as ComboItem;
+                hostId = (ci != null) ? (ci.Id ?? "") : "";
+            }
+
+            if (string.IsNullOrWhiteSpace(hostId) && _obj != null)
+                hostId = FirstNonEmpty(_obj.OrbitHostObjectId, _obj.ParentObjectId) ?? "";
+
+            return hostId ?? "";
+        }
+
 
         private void MoveOrbitSelection(int delta)
         {
@@ -1607,6 +1704,8 @@ namespace StarMap2010.Ui
             _lstOrbitOrder.Items.RemoveAt(srcIndex);
             _lstOrbitOrder.Items.Insert(dropIndex, data);
             _lstOrbitOrder.SelectedIndex = dropIndex;
+
+            _dirtyOrbitHosts.Add(GetSelectedHostId());
         }
 
         private int DetermineOrbitPosFromList()
@@ -1624,10 +1723,31 @@ namespace StarMap2010.Ui
             return _obj.RadialOrder;
         }
 
-        private void PersistOrbitOrder(SQLiteConnection conn, SQLiteTransaction tx)
+
+        private void PersistOrbitChanges(SQLiteConnection conn, SQLiteTransaction tx)
+        {
+            if (_obj == null) return;
+            if (_all == null) return;
+
+            // Always persist ordering for the currently selected host group, based on the visible list.
+            string currentHostId = GetSelectedHostId();
+            PersistHostFromList(conn, tx, currentHostId);
+
+            // Persist any additional dirty host groups (e.g., cross-host moves)
+            foreach (var hostId in _dirtyOrbitHosts)
+            {
+                if (string.Equals(hostId ?? "", currentHostId ?? "", StringComparison.Ordinal))
+                    continue;
+
+                PersistHostByExistingSort(conn, tx, hostId ?? "");
+            }
+
+            _dirtyOrbitHosts.Clear();
+        }
+
+        private void PersistHostFromList(SQLiteConnection conn, SQLiteTransaction tx, string hostId)
         {
             if (_lstOrbitOrder == null || _lstOrbitOrder.Items.Count == 0) return;
-            if (_obj == null) return;
 
             for (int i = 0; i < _lstOrbitOrder.Items.Count; i++)
             {
@@ -1638,18 +1758,90 @@ namespace StarMap2010.Ui
 
                 using (var cmd = new SQLiteCommand(
                     @"UPDATE system_objects
-                      SET radial_order = @ro
+                      SET orbit_host_object_id = @host,
+                          radial_order = @ro
                       WHERE object_id = @id;", conn, tx))
                 {
+                    cmd.Parameters.AddWithValue("@host", string.IsNullOrWhiteSpace(hostId) ? (object)DBNull.Value : hostId);
                     cmd.Parameters.AddWithValue("@ro", ro);
                     cmd.Parameters.AddWithValue("@id", it.Id);
                     cmd.ExecuteNonQuery();
                 }
 
+                // Update cached object, if present
+                for (int j = 0; j < _all.Count; j++)
+                {
+                    var o = _all[j];
+                    if (o == null) continue;
+                    if (string.Equals(o.ObjectId, it.Id, StringComparison.Ordinal))
+                    {
+                        o.RadialOrder = ro;
+                        o.OrbitHostObjectId = string.IsNullOrWhiteSpace(hostId) ? null : hostId;
+                        break;
+                    }
+                }
+
                 if (string.Equals(it.Id, _obj.ObjectId, StringComparison.Ordinal))
+                {
+                    _obj.RadialOrder = ro;
+                    _obj.OrbitHostObjectId = string.IsNullOrWhiteSpace(hostId) ? null : hostId;
+                }
+            }
+        }
+
+        private void PersistHostByExistingSort(SQLiteConnection conn, SQLiteTransaction tx, string hostId)
+        {
+            var orbiters = new List<SystemObjectInfo>();
+
+            for (int i = 0; i < _all.Count; i++)
+            {
+                var o = _all[i];
+                if (o == null) continue;
+
+                string oHost = FirstNonEmpty(o.OrbitHostObjectId, o.ParentObjectId) ?? "";
+                if (!string.Equals(oHost, hostId ?? "", StringComparison.Ordinal)) continue;
+
+                if (IsOrbitingKind(o.ObjectKind))
+                    orbiters.Add(o);
+            }
+
+            orbiters.Sort(delegate(SystemObjectInfo a, SystemObjectInfo b)
+            {
+                int ra = (a != null) ? a.RadialOrder : 0;
+                int rb = (b != null) ? b.RadialOrder : 0;
+                if (ra != rb) return ra.CompareTo(rb);
+                string na = (a != null ? a.DisplayName : "") ?? "";
+                string nb = (b != null ? b.DisplayName : "") ?? "";
+                return string.Compare(na, nb, StringComparison.OrdinalIgnoreCase);
+            });
+
+            for (int i = 0; i < orbiters.Count; i++)
+            {
+                var o = orbiters[i];
+                if (o == null || string.IsNullOrWhiteSpace(o.ObjectId)) continue;
+
+                int ro = i * 10;
+
+                using (var cmd = new SQLiteCommand(
+                    @"UPDATE system_objects
+                      SET orbit_host_object_id = @host,
+                          radial_order = @ro
+                      WHERE object_id = @id;", conn, tx))
+                {
+                    cmd.Parameters.AddWithValue("@host", string.IsNullOrWhiteSpace(hostId) ? (object)DBNull.Value : hostId);
+                    cmd.Parameters.AddWithValue("@ro", ro);
+                    cmd.Parameters.AddWithValue("@id", o.ObjectId);
+                    cmd.ExecuteNonQuery();
+                }
+
+                o.RadialOrder = ro;
+                o.OrbitHostObjectId = string.IsNullOrWhiteSpace(hostId) ? null : hostId;
+
+                if (_obj != null && string.Equals(o.ObjectId, _obj.ObjectId, StringComparison.Ordinal))
                     _obj.RadialOrder = ro;
             }
         }
+
 
         private void SaveDetailsIfApplicable(SQLiteConnection conn, SQLiteTransaction tx)
         {
@@ -1662,5 +1854,279 @@ namespace StarMap2010.Ui
             else if (kind == "moon")
                 SavePropsTable(conn, tx, "moon_details", "object_id", _obj.ObjectId, _gridDetails);
         }
+
+        // -------------------- Orbit host target drag/drop --------------------
+        // Dragging comes from _lstOrbitOrder; dropping onto _lstOrbitHosts changes orbit_host_object_id.
+
+        private void OrbitHosts_DragEnter(object sender, DragEventArgs e)
+        {
+            // We accept the same payload as the orbit order drag source uses.
+            // Typical patterns: a string object_id, a SystemObjectInfo, or a ListBoxItem.
+            if (e.Data == null)
+            {
+                e.Effect = DragDropEffects.None;
+                return;
+            }
+
+            if (e.Data.GetDataPresent(typeof(string)) ||
+                e.Data.GetDataPresent(typeof(SystemObjectInfo)))
+            {
+                e.Effect = DragDropEffects.Move;
+            }
+            else
+            {
+                e.Effect = DragDropEffects.None;
+            }
+        }
+
+        private void OrbitHosts_DragOver(object sender, DragEventArgs e)
+        {
+            if (e.Data == null || _lstOrbitHosts == null)
+            {
+                e.Effect = DragDropEffects.None;
+                return;
+            }
+
+            e.Effect = DragDropEffects.Move;
+
+            // UX: highlight the host under the cursor so it feels like a drop target.
+            Point pt = _lstOrbitHosts.PointToClient(new Point(e.X, e.Y));
+            int idx = _lstOrbitHosts.IndexFromPoint(pt);
+
+            if (idx >= 0 && idx < _lstOrbitHosts.Items.Count)
+                _lstOrbitHosts.SelectedIndex = idx;
+        }
+
+        private void OrbitHosts_DragDrop(object sender, DragEventArgs e)
+        {
+            if (e.Data == null) return;
+            if (_lstOrbitHosts == null || _lstOrbitOrder == null) return;
+
+            // Identify destination host from where the user dropped.
+            Point pt = _lstOrbitHosts.PointToClient(new Point(e.X, e.Y));
+            int hostIdx = _lstOrbitHosts.IndexFromPoint(pt);
+            if (hostIdx < 0 || hostIdx >= _lstOrbitHosts.Items.Count) return;
+
+            object hostObj = _lstOrbitHosts.Items[hostIdx];
+            string newHostId = GetOrbitHostIdFromItem(hostObj);
+            if (string.IsNullOrEmpty(newHostId)) return;
+
+            // Identify dragged object id.
+            string movedObjectId = null;
+
+            if (e.Data.GetDataPresent(typeof(string)))
+            {
+                movedObjectId = e.Data.GetData(typeof(string)) as string;
+            }
+            else if (e.Data.GetDataPresent(typeof(SystemObjectInfo)))
+            {
+                var o = e.Data.GetData(typeof(SystemObjectInfo)) as SystemObjectInfo;
+                if (o != null)
+                    movedObjectId = o.ObjectId;
+            }
+
+
+            if (string.IsNullOrEmpty(movedObjectId)) return;
+
+            // Find the moved object
+            SystemObjectInfo moved = FindObjectById(movedObjectId);
+            if (moved == null) return;
+
+            // Guardrails
+            if (string.Equals(newHostId, moved.ObjectId, StringComparison.Ordinal))
+            {
+                ShowOrbitToast("Can't orbit an object around itself.");
+                return;
+            }
+
+            // If already on that host, treat as "no-op"
+            if (string.Equals(moved.OrbitHostObjectId ?? "", newHostId, StringComparison.Ordinal))
+                return;
+
+            // Prevent cycles: new host cannot be inside moved's subtree
+            if (IsDescendantHost(newHostId, moved.ObjectId))
+            {
+                ShowOrbitToast("Can't move: would create an orbit cycle.");
+                return;
+            }
+
+            string oldHostId = moved.OrbitHostObjectId;
+
+            // Apply change in memory
+            moved.OrbitHostObjectId = newHostId;
+
+            // Mark dirty: both old and new host groups need radial_order rewrite on save
+            MarkOrbitHostDirty(oldHostId);
+            MarkOrbitHostDirty(newHostId);
+
+            // Update UI
+            RefreshOrbitHostsList();
+            RefreshOrbitOrderList();
+
+            string movedName = GetObjectName(moved);
+            string hostName = GetOrbitHostNameFromItem(hostObj);
+            ShowOrbitToast("Moved " + movedName + " → " + hostName);
+        }
+
+        // -------------------- Orbit helpers (no custom item types) --------------------
+
+        // Track which host groups need their radial_order rewritten on Save.
+        // Add this field near your other fields if you don't already have it:
+        // private HashSet<string> _dirtyOrbitHosts;
+
+        private void MarkOrbitHostDirty(string hostId)
+        {
+            if (string.IsNullOrEmpty(hostId)) return;
+            if (_dirtyOrbitHosts == null)
+                _dirtyOrbitHosts = new HashSet<string>(StringComparer.Ordinal);
+            _dirtyOrbitHosts.Add(hostId);
+        }
+
+        private SystemObjectInfo FindObjectById(string id)
+        {
+            if (string.IsNullOrEmpty(id) || _all == null) return null;
+
+            for (int i = 0; i < _all.Count; i++)
+            {
+                var o = _all[i];
+                if (o != null && string.Equals(o.ObjectId, id, StringComparison.Ordinal))
+                    return o;
+            }
+            return null;
+        }
+
+        private bool IsDescendantHost(string candidateHostId, string movedObjectId)
+        {
+            // Walk upward from candidateHostId following orbit_host_object_id.
+            // If we ever reach movedObjectId, candidate is inside moved's subtree -> cycle risk.
+            if (string.IsNullOrEmpty(candidateHostId) || string.IsNullOrEmpty(movedObjectId))
+                return false;
+
+            string cur = candidateHostId;
+            int guard = 0;
+
+            while (!string.IsNullOrEmpty(cur) && guard < 2000)
+            {
+                guard++;
+
+                if (string.Equals(cur, movedObjectId, StringComparison.Ordinal))
+                    return true;
+
+                var o = FindObjectById(cur);
+                if (o == null) break;
+
+                cur = o.OrbitHostObjectId;
+            }
+
+            return false;
+        }
+
+        private void ShowOrbitToast(string msg)
+        {
+            // This assumes you created a label + timer for toast.
+            // If your project uses different names, rename here.
+            if (_lblOrbitToast == null) return;
+
+            _lblOrbitToast.Text = msg ?? "";
+            _lblOrbitToast.Visible = true;
+
+            if (_orbitToastTimer != null)
+            {
+                _orbitToastTimer.Stop();
+                _orbitToastTimer.Start();
+            }
+        }
+
+        // Host list item parsing: supports either string items (hostId),
+        // or SystemObjectInfo items, or anonymous objects that ToString to a name.
+        private string GetOrbitHostIdFromItem(object hostItem)
+        {
+            if (hostItem == null) return null;
+
+            // If you stored host IDs directly as strings, easiest case:
+            var s = hostItem as string;
+            if (!string.IsNullOrEmpty(s))
+                return s;
+
+            // If items are SystemObjectInfo:
+            var o = hostItem as SystemObjectInfo;
+            if (o != null)
+                return o.ObjectId;
+
+            // If you used KeyValuePair-like or a small class, try common property names via reflection.
+            // (VS2013 compatible; safe fallback)
+            try
+            {
+                var t = hostItem.GetType();
+                var pId = t.GetProperty("Id") ?? t.GetProperty("ID") ?? t.GetProperty("ObjectId") ?? t.GetProperty("object_id");
+                if (pId != null)
+                {
+                    var v = pId.GetValue(hostItem, null) as string;
+                    if (!string.IsNullOrEmpty(v)) return v;
+                }
+            }
+            catch { }
+
+            return null;
+        }
+
+        private string GetOrbitHostNameFromItem(object hostItem)
+        {
+            if (hostItem == null) return "(host)";
+
+            // If stored as SystemObjectInfo:
+            var o = hostItem as SystemObjectInfo;
+            if (o != null)
+                return GetObjectName(o);
+
+            // If stored as string hostId:
+            var s = hostItem as string;
+            if (!string.IsNullOrEmpty(s))
+            {
+                // try resolve name from object list
+                var obj = FindObjectById(s);
+                return obj != null ? GetObjectName(obj) : s;
+            }
+
+            // Reflection attempt for common name props
+            try
+            {
+                var t = hostItem.GetType();
+                var pText = t.GetProperty("Text") ?? t.GetProperty("Name") ?? t.GetProperty("DisplayName") ?? t.GetProperty("ObjectName");
+                if (pText != null)
+                {
+                    var v = pText.GetValue(hostItem, null) as string;
+                    if (!string.IsNullOrEmpty(v)) return v;
+                }
+            }
+            catch { }
+
+            return hostItem.ToString();
+        }
+
+        private string GetObjectName(SystemObjectInfo o)
+        {
+            if (o == null) return "(unnamed)";
+
+            // Try common property names that StarMap has used in various places:
+            // DisplayName, ObjectName, Name, ObjectNameOrId, etc.
+            // We'll use reflection so we don't guess wrong and break compile.
+            try
+            {
+                var t = o.GetType();
+                var p = t.GetProperty("DisplayName") ?? t.GetProperty("ObjectName") ?? t.GetProperty("Name");
+                if (p != null)
+                {
+                    var v = p.GetValue(o, null) as string;
+                    if (!string.IsNullOrEmpty(v)) return v;
+                }
+            }
+            catch { }
+
+            // Fallback to ID
+            return string.IsNullOrEmpty(o.ObjectId) ? "(unnamed)" : o.ObjectId;
+        }
+
+
     }
 }

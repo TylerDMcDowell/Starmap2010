@@ -45,8 +45,14 @@ namespace StarMap2010
 
             using (var dlg = new ObjectEditorForm(_dbPath, obj, ObjectEditorMode.Edit, all))
             {
-                dlg.ShowDialog(this);
+                System.Windows.Forms.DialogResult dr = dlg.ShowDialog(this);
+
+                if (dr == System.Windows.Forms.DialogResult.OK)
+                {
+                    ReloadTreeAndReselect(obj.ObjectId);
+                }
             }
         }
+
     }
 }
