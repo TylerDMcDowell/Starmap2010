@@ -7,6 +7,7 @@
 // ============================================================
 
 using System.Collections.Generic;
+using System.Windows.Forms;
 using StarMap2010.Models;
 using StarMap2010.Ui;
 

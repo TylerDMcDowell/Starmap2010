@@ -56,6 +56,7 @@ namespace StarMap2010.Ui
         private ListBox _lstOrbitHosts;
         private Label _lblOrbitToast;
         private Timer _orbitToastTimer;
+        private bool _orbitDirty;
         private HashSet<string> _dirtyOrbitHosts = new HashSet<string>(StringComparer.Ordinal);
         // Tabs
         private TextBox _txtSummary;
@@ -301,7 +302,7 @@ namespace StarMap2010.Ui
 
             _pnlOrbitBtns = new FlowLayoutPanel
             {
-                Dock = DockStyle.Fill,
+                Dock = DockStyle.Top,
                 FlowDirection = FlowDirection.TopDown,
                 AutoSize = true,
                 WrapContents = false,
@@ -327,7 +328,7 @@ namespace StarMap2010.Ui
             {
                 AutoSize = true,
                 ForeColor = SystemColors.GrayText,
-                Text = "Drag to reorder. Drag onto a host (right) to move between hosts."
+                Text = "Drag to reorder.\r\nDrag an item onto a host to move it."
             };
 
             _lblOrbitToast = new Label
@@ -402,6 +403,12 @@ namespace StarMap2010.Ui
 
 
 
+
+            if (_lstOrbitOrder != null)
+            {
+                _lstOrbitOrder.SelectedIndexChanged += (s, e) => UpdateOrbitMoveButtons();
+            }
+
             if (_lstOrbitHosts != null)
             {
                 _lstOrbitHosts.AllowDrop = true;
@@ -413,7 +420,41 @@ namespace StarMap2010.Ui
             if (_btnOrbitDown != null) _btnOrbitDown.Click += (s, e) => MoveOrbitSelection(1);
 
             if (_cmbHost != null)
-                _cmbHost.SelectedIndexChanged += (s, e) => { RefreshOrbitHostsList(); RefreshOrbitOrderList(); };
+                _cmbHost.SelectedIndexChanged += (s, e) =>
+                {
+                    if (_mode != ObjectEditorMode.Edit) { RefreshOrbitHostsList(); RefreshOrbitOrderList(); return; }
+                    if (_obj == null) { RefreshOrbitHostsList(); RefreshOrbitOrderList(); return; }
+
+                    string newHostId = GetSelectedHostId();
+                    string oldHostId = FirstNonEmpty(_obj.OrbitHostObjectId, _obj.ParentObjectId) ?? "";
+
+                    // Prevent self-host
+                    if (!string.IsNullOrEmpty(newHostId) && string.Equals(newHostId, _obj.ObjectId, StringComparison.Ordinal))
+                    {
+                        ShowOrbitToast("Can't set host to itself.");
+                        SelectHostInDropdown(oldHostId);
+                        return;
+                    }
+
+                    // Prevent cycles: new host cannot be inside this object's subtree
+                    if (!string.IsNullOrEmpty(newHostId) && IsDescendantHost(newHostId, _obj.ObjectId))
+                    {
+                        ShowOrbitToast("Can't change host: would create an orbit cycle.");
+                        SelectHostInDropdown(oldHostId);
+                        return;
+                    }
+
+                    // If host actually changed, mark both groups dirty so radial_order is rewritten correctly on Save
+                    if (!string.Equals(newHostId ?? "", oldHostId ?? "", StringComparison.Ordinal))
+                    {
+                        MarkOrbitHostDirty(oldHostId);
+                        MarkOrbitHostDirty(newHostId);
+                    }
+
+                    RefreshOrbitHostsList();
+                    RefreshOrbitOrderList();
+                    UpdateOrbitMoveButtons();
+                };
 
             return outer;
         }
@@ -496,6 +537,9 @@ namespace StarMap2010.Ui
             if (_pnlOrbitBtns != null) _pnlOrbitBtns.Visible = basicsEditable;
             if (_lstOrbitHosts != null) _lstOrbitHosts.Visible = basicsEditable;
             if (_lblOrbitHelp != null) _lblOrbitHelp.Visible = basicsEditable;
+
+            if (basicsEditable) UpdateOrbitMoveButtons();
+            else { if (_btnOrbitUp != null) _btnOrbitUp.Visible = false; if (_btnOrbitDown != null) _btnOrbitDown.Visible = false; if (_pnlOrbitBtns != null) _pnlOrbitBtns.Visible = false; }
 
             if (_btnPrimary != null)
             {
@@ -1636,6 +1680,8 @@ namespace StarMap2010.Ui
 
             if (_lstOrbitOrder.Items.Count > 0)
                 _lstOrbitOrder.SelectedIndex = (selectIndex >= 0) ? selectIndex : 0;
+
+            UpdateOrbitMoveButtons();
         }
 
 
@@ -1655,6 +1701,40 @@ namespace StarMap2010.Ui
         }
 
 
+
+        private void UpdateOrbitMoveButtons()
+        {
+            if (_mode != ObjectEditorMode.Edit)
+            {
+                if (_btnOrbitUp != null) _btnOrbitUp.Visible = false;
+                if (_btnOrbitDown != null) _btnOrbitDown.Visible = false;
+                if (_pnlOrbitBtns != null) _pnlOrbitBtns.Visible = false;
+                return;
+            }
+
+            if (_lstOrbitOrder == null || _lstOrbitOrder.Items.Count <= 1 || _lstOrbitOrder.SelectedIndex < 0)
+            {
+                if (_btnOrbitUp != null) _btnOrbitUp.Visible = false;
+                if (_btnOrbitDown != null) _btnOrbitDown.Visible = false;
+            }
+            else
+            {
+                int idxSel = _lstOrbitOrder.SelectedIndex;
+                int count = _lstOrbitOrder.Items.Count;
+
+                if (_btnOrbitUp != null) _btnOrbitUp.Visible = (idxSel > 0);
+                if (_btnOrbitDown != null) _btnOrbitDown.Visible = (idxSel < count - 1);
+            }
+
+            if (_pnlOrbitBtns != null)
+                _pnlOrbitBtns.Visible = (_btnOrbitUp != null && _btnOrbitUp.Visible) || (_btnOrbitDown != null && _btnOrbitDown.Visible);
+        }
+
+        private void MarkOrbitDirty()
+        {
+            _orbitDirty = true;
+        }
+
         private void MoveOrbitSelection(int delta)
         {
             if (_lstOrbitOrder == null) return;
@@ -1670,6 +1750,9 @@ namespace StarMap2010.Ui
             _lstOrbitOrder.Items.RemoveAt(i);
             _lstOrbitOrder.Items.Insert(j, item);
             _lstOrbitOrder.SelectedIndex = j;
+
+            MarkOrbitHostDirty(GetSelectedHostId());
+            UpdateOrbitMoveButtons();
         }
 
         private int _orbitDragIndex = -1;
@@ -1712,7 +1795,8 @@ namespace StarMap2010.Ui
             _lstOrbitOrder.Items.Insert(dropIndex, data);
             _lstOrbitOrder.SelectedIndex = dropIndex;
 
-            _dirtyOrbitHosts.Add(GetSelectedHostId());
+            MarkOrbitHostDirty(GetSelectedHostId());
+            UpdateOrbitMoveButtons();
         }
 
         private int DetermineOrbitPosFromList()
@@ -1987,6 +2071,7 @@ namespace StarMap2010.Ui
             if (_dirtyOrbitHosts == null)
                 _dirtyOrbitHosts = new HashSet<string>(StringComparer.Ordinal);
             _dirtyOrbitHosts.Add(hostId);
+            MarkOrbitDirty();
         }
 
         private SystemObjectInfo FindObjectById(string id)
