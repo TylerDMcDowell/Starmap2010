@@ -65,6 +65,11 @@ namespace StarMap2010.Ui
         private DataGridView _gridTerraform;
         private DataGridView _gridAttrs;
 
+        // Gate / Installations
+        private DataGridView _gridGate;
+        private DataGridView _gridGateLinks;
+        private DataGridView _gridInstallation;
+
         private FlowLayoutPanel _pnlOrbitBtns;
         private FlowLayoutPanel _pnlHelpWrap;
         private TableLayoutPanel _pnlOrbitWrap;
@@ -160,6 +165,29 @@ namespace StarMap2010.Ui
             _gridTerraform = MakeGridProps(true);
             tabTerraform.Controls.Add(_gridTerraform);
             _tabs.TabPages.Add(tabTerraform);
+
+            // ---- Gate tabs (Gate Facility objects) ----
+            if (IsGateFacilityObject(_obj))
+            {
+                var tabGate = new TabPage("Gate");
+                _gridGate = MakeGridProps(true);
+                tabGate.Controls.Add(_gridGate);
+                _tabs.TabPages.Add(tabGate);
+
+                var tabLinks = new TabPage("Links");
+                _gridGateLinks = MakeGridGateLinks();
+                tabLinks.Controls.Add(_gridGateLinks);
+                _tabs.TabPages.Add(tabLinks);
+            }
+
+            // ---- Installation tab ----
+            if (IsInstallationObject(_obj))
+            {
+                var tabInst = new TabPage("Installation");
+                _gridInstallation = MakeGridProps(true);
+                tabInst.Controls.Add(_gridInstallation);
+                _tabs.TabPages.Add(tabInst);
+            }
 
             // ---- Attributes tab ----
             var tabAttrs = new TabPage("Attributes");
@@ -521,9 +549,26 @@ namespace StarMap2010.Ui
             return g;
         }
 
+        private static DataGridView MakeGridGateLinks()
+        {
+            var g = MakeGridBase();
+            g.ReadOnly = true;
+            g.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+            g.AllowUserToAddRows = false;
+            g.AllowUserToDeleteRows = false;
+            return g;
+        }
+
         private void ApplyMode()
         {
             bool isEdit = (_mode == ObjectEditorMode.Edit);
+
+            // Property grids should only be editable in Edit mode
+            SetPropsGridReadOnly(_gridDetails, !isEdit);
+            SetPropsGridReadOnly(_gridEnv, !isEdit);
+            SetPropsGridReadOnly(_gridTerraform, !isEdit);
+            SetPropsGridReadOnly(_gridGate, !isEdit);
+            SetPropsGridReadOnly(_gridInstallation, !isEdit);
 
             bool basicsEditable = isEdit;
             if (_txtName != null) _txtName.ReadOnly = !basicsEditable;
@@ -556,6 +601,12 @@ namespace StarMap2010.Ui
 
             AcceptButton = _btnPrimary;
             CancelButton = isEdit ? _btnCancel : _btnPrimary;
+        }
+
+        private static void SetPropsGridReadOnly(DataGridView grid, bool readOnly)
+        {
+            if (grid == null) return;
+            grid.ReadOnly = readOnly;
         }
 
         private void RenderHeaderAndSummary()
@@ -738,6 +789,45 @@ namespace StarMap2010.Ui
                 var dtTer = QueryTable("SELECT * FROM terraform_constraints WHERE object_id = @id;", _obj.ObjectId);
                 BindOneRowAsFriendlyProperties(_gridTerraform, dtTer, TerraformOrder);
 
+                // Gate / Links
+                if (_gridGate != null && IsGateFacilityObject(_obj))
+                {
+                    string gateId = FirstNonEmpty(_obj.RelatedId, _obj.ObjectId);
+                    var dtGate = QueryTable("SELECT * FROM jump_gates WHERE gate_id = @id;", gateId);
+                    BindOneRowAsFriendlyProperties(_gridGate, dtGate, GateOrder);
+
+                    if (_gridGateLinks != null)
+                    {
+                        var dtLinks = QueryTable(
+                            @"SELECT
+                                CASE WHEN l.gate_a_id = @id THEN sb.system_name ELSE sa.system_name END AS connected_system,
+                                l.status AS status,
+                                CASE WHEN l.is_bidirectional IS NULL THEN '' WHEN l.is_bidirectional = 0 THEN 'N' ELSE 'Y' END AS bi,
+                                l.transit_hours AS hours,
+                                l.toll_credits AS toll,
+                                l.active_from AS active_from,
+                                l.active_until AS active_until,
+                                l.notes AS notes
+                              FROM jump_gate_links l
+                              JOIN jump_gates ga ON ga.gate_id = l.gate_a_id
+                              JOIN jump_gates gb ON gb.gate_id = l.gate_b_id
+                              JOIN star_systems sa ON sa.system_id = ga.system_id
+                              JOIN star_systems sb ON sb.system_id = gb.system_id
+                              WHERE l.gate_a_id = @id OR l.gate_b_id = @id
+                              ORDER BY connected_system COLLATE NOCASE;",
+                            gateId);
+                        _gridGateLinks.DataSource = dtLinks;
+                        AutoSizeGrid(_gridGateLinks);
+                    }
+                }
+
+                // Installation
+                if (_gridInstallation != null && IsInstallationObject(_obj))
+                {
+                    var dtInst = QueryTable("SELECT * FROM installation_details WHERE object_id = @id;", _obj.ObjectId);
+                    BindOneRowAsFriendlyProperties(_gridInstallation, dtInst, InstallationOrder);
+                }
+
                 var dtAttrsRaw = QueryTable(
                     @"SELECT
                         oa.attr_key AS attr_key,
@@ -780,6 +870,20 @@ namespace StarMap2010.Ui
             }
 
             return dt;
+        }
+
+        private static void AutoSizeGrid(DataGridView g)
+        {
+            if (g == null) return;
+            try
+            {
+                g.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.DisplayedCells;
+                g.AutoResizeColumns(DataGridViewAutoSizeColumnsMode.DisplayedCells);
+            }
+            catch
+            {
+                // ignore
+            }
         }
 
         private static void BindOneRowAsFriendlyProperties(DataGridView grid, DataTable dt, string[] preferredOrder)
@@ -1052,8 +1156,71 @@ namespace StarMap2010.Ui
                     SavePropsTable(conn, tx, "body_environment", "object_id", _obj.ObjectId, _gridEnv);
                     SavePropsTable(conn, tx, "terraform_constraints", "object_id", _obj.ObjectId, _gridTerraform);
 
+                    if (IsGateFacilityObject(_obj) && _gridGate != null)
+                        SaveJumpGate(conn, tx);
+
+                    if (IsInstallationObject(_obj) && _gridInstallation != null)
+                        SaveInstallationDetails(conn, tx);
+
                     tx.Commit();
                 }
+            }
+        }
+
+        private void SaveJumpGate(SQLiteConnection conn, SQLiteTransaction tx)
+        {
+            string gateId = FirstNonEmpty(_obj.RelatedId, _obj.ObjectId);
+            EnsureJumpGateRow(conn, tx, gateId);
+            SavePropsTable(conn, tx, "jump_gates", "gate_id", gateId, _gridGate);
+        }
+
+        private void SaveInstallationDetails(SQLiteConnection conn, SQLiteTransaction tx)
+        {
+            EnsureInstallationDetailsRow(conn, tx, _obj.ObjectId);
+            SavePropsTable(conn, tx, "installation_details", "object_id", _obj.ObjectId, _gridInstallation);
+        }
+
+        private void EnsureJumpGateRow(SQLiteConnection conn, SQLiteTransaction tx, string gateId)
+        {
+            string govId = LookupSystemGovernment(conn, tx, _obj.SystemId);
+            if (string.IsNullOrWhiteSpace(govId)) govId = "GOV_UNALIGNED";
+
+            using (var cmd = new SQLiteCommand(
+                @"INSERT OR IGNORE INTO jump_gates
+                    (gate_id, system_id, owner_government_id, gate_type, gate_class, gate_role, is_operational, is_primary)
+                  VALUES
+                    (@id, @sid, @gov, 'standard', 'standard', 'standard', 1, 0);", conn, tx))
+            {
+                cmd.Parameters.AddWithValue("@id", gateId ?? "");
+                cmd.Parameters.AddWithValue("@sid", _obj.SystemId ?? "");
+                cmd.Parameters.AddWithValue("@gov", govId);
+                cmd.ExecuteNonQuery();
+            }
+        }
+
+        private void EnsureInstallationDetailsRow(SQLiteConnection conn, SQLiteTransaction tx, string objectId)
+        {
+            using (var cmd = new SQLiteCommand(
+                @"INSERT OR IGNORE INTO installation_details
+                    (object_id, installation_type, status, is_primary, is_secret)
+                  VALUES
+                    (@id, 'unknown', 'active', 0, 0);", conn, tx))
+            {
+                cmd.Parameters.AddWithValue("@id", objectId ?? "");
+                cmd.ExecuteNonQuery();
+            }
+        }
+
+        private static string LookupSystemGovernment(SQLiteConnection conn, SQLiteTransaction tx, string systemId)
+        {
+            if (string.IsNullOrWhiteSpace(systemId)) return null;
+
+            using (var cmd = new SQLiteCommand("SELECT government_id FROM star_systems WHERE system_id = @sid LIMIT 1;", conn, tx))
+            {
+                cmd.Parameters.AddWithValue("@sid", systemId.Trim());
+                object v = cmd.ExecuteScalar();
+                if (v == null || v == DBNull.Value) return null;
+                return Convert.ToString(v);
             }
         }
 
@@ -1122,6 +1289,9 @@ namespace StarMap2010.Ui
             {
                 var r = dt.Rows[i];
                 string col = Convert.ToString(r["__col"]);
+                if (string.Equals(col, "info", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
                 if (string.IsNullOrWhiteSpace(col)) continue;
 
                 if (EqualsIgnore(col, pkCol)) continue;
@@ -1202,7 +1372,7 @@ namespace StarMap2010.Ui
                 case "station": return "Station";
                 case "gate_facility": return "Gate facility";
                 case "star": return "Star";
-                case "system_root": return "System root";
+                case "system_root": return "Solar System";
                 default:
                     if (kind.Length == 0) return "-";
                     return char.ToUpperInvariant(kind[0]) + kind.Substring(1);
@@ -1278,6 +1448,23 @@ namespace StarMap2010.Ui
         private static bool EqualsIgnore(string a, string b)
         {
             return string.Equals(a ?? "", b ?? "", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsGateFacilityObject(SystemObjectInfo o)
+        {
+            if (o == null) return false;
+
+            if (EqualsIgnore(o.ObjectKind, "gate_facility")) return true;
+            if (!string.IsNullOrWhiteSpace(o.RelatedTable) && EqualsIgnore(o.RelatedTable.Trim(), "jump_gates")) return true;
+            return false;
+        }
+
+        private static bool IsInstallationObject(SystemObjectInfo o)
+        {
+            if (o == null) return false;
+            if (EqualsIgnore(o.ObjectKind, "installation")) return true;
+            if (EqualsIgnore(o.ObjectKind, "station")) return true;
+            return false;
         }
 
         // ---------------- Orbit phrase helpers ----------------
@@ -1524,6 +1711,33 @@ namespace StarMap2010.Ui
             "atmosphere_retention",
             "radiation_constraint",
             "maintenance_burden"
+        };
+
+        private static readonly string[] GateOrder = new[]
+        {
+            "gate_name",
+            "owner_government_id",
+            "gate_type",
+            "gate_class",
+            "gate_role",
+            "is_operational",
+            "is_primary",
+            "commissioned_date",
+            "decommissioned_date"
+        };
+
+        private static readonly string[] InstallationOrder = new[]
+        {
+            "installation_type",
+            "owner_government_id",
+            "status",
+            "strategic_role",
+            "is_primary",
+            "staff_count",
+            "security_level",
+            "is_secret",
+            "commissioned_date",
+            "decommissioned_date"
         };
 
         private static int GetOrderRank(string[] order, string col)
@@ -2217,6 +2431,24 @@ namespace StarMap2010.Ui
 
             // Fallback to ID
             return string.IsNullOrEmpty(o.ObjectId) ? "(unnamed)" : o.ObjectId;
+        }
+
+        private void InitializeComponent()
+        {
+            this.SuspendLayout();
+            // 
+            // ObjectEditorForm
+            // 
+            this.ClientSize = new System.Drawing.Size(284, 261);
+            this.Name = "ObjectEditorForm";
+            this.Load += new System.EventHandler(this.ObjectEditorForm_Load);
+            this.ResumeLayout(false);
+
+        }
+
+        private void ObjectEditorForm_Load(object sender, EventArgs e)
+        {
+
         }
 
 
