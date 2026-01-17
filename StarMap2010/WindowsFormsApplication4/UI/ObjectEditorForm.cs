@@ -58,6 +58,9 @@ namespace StarMap2010.Ui
         private Timer _orbitToastTimer;
         private bool _orbitDirty;
         private HashSet<string> _dirtyOrbitHosts = new HashSet<string>(StringComparer.Ordinal);
+
+        // Gate name cache (gate_id -> gate_name) for friendly labels
+        private Dictionary<string, string> _gateNameCache = new Dictionary<string, string>(StringComparer.Ordinal);
         // Tabs
         private TextBox _txtSummary;
         private DataGridView _gridDetails;
@@ -68,6 +71,8 @@ namespace StarMap2010.Ui
         // Gate / Installations
         private DataGridView _gridGate;
         private DataGridView _gridGateLinks;
+        private Button _btnAddGateLink;
+        private Button _btnRemoveGateLink;
         private DataGridView _gridInstallation;
 
         private FlowLayoutPanel _pnlOrbitBtns;
@@ -148,26 +153,33 @@ namespace StarMap2010.Ui
 
             _tabs.TabPages.Add(tabSummary);
 
-            // ---- Details tab ---- (now editable in Edit mode; same 2-col look)
-            var tabDetails = new TabPage("Details");
-            _gridDetails = MakeGridProps(true);
-            tabDetails.Controls.Add(_gridDetails);
-            _tabs.TabPages.Add(tabDetails);
+            bool isGateFacility = IsGateFacilityObject(_obj);
 
-            // ---- Environment tab ----
-            var tabEnv = new TabPage("Environment");
-            _gridEnv = MakeGridProps(true);
-            tabEnv.Controls.Add(_gridEnv);
-            _tabs.TabPages.Add(tabEnv);
+            // ---- Details/Environment/Terraform tabs ----
+            // Gate facilities should NOT show planet/moon/env/terraform tabs.
+            if (!isGateFacility)
+            {
+                // ---- Details tab ---- (now editable in Edit mode; same 2-col look)
+                var tabDetails = new TabPage("Details");
+                _gridDetails = MakeGridProps(true);
+                tabDetails.Controls.Add(_gridDetails);
+                _tabs.TabPages.Add(tabDetails);
 
-            // ---- Terraform tab ----
-            var tabTerraform = new TabPage("Terraform");
-            _gridTerraform = MakeGridProps(true);
-            tabTerraform.Controls.Add(_gridTerraform);
-            _tabs.TabPages.Add(tabTerraform);
+                // ---- Environment tab ----
+                var tabEnv = new TabPage("Environment");
+                _gridEnv = MakeGridProps(true);
+                tabEnv.Controls.Add(_gridEnv);
+                _tabs.TabPages.Add(tabEnv);
+
+                // ---- Terraform tab ----
+                var tabTerraform = new TabPage("Terraform");
+                _gridTerraform = MakeGridProps(true);
+                tabTerraform.Controls.Add(_gridTerraform);
+                _tabs.TabPages.Add(tabTerraform);
+            }
 
             // ---- Gate tabs (Gate Facility objects) ----
-            if (IsGateFacilityObject(_obj))
+            if (isGateFacility)
             {
                 var tabGate = new TabPage("Gate");
                 _gridGate = MakeGridProps(true);
@@ -175,8 +187,7 @@ namespace StarMap2010.Ui
                 _tabs.TabPages.Add(tabGate);
 
                 var tabLinks = new TabPage("Links");
-                _gridGateLinks = MakeGridGateLinks();
-                tabLinks.Controls.Add(_gridGateLinks);
+                tabLinks.Controls.Add(BuildGateLinksPanel());
                 _tabs.TabPages.Add(tabLinks);
             }
 
@@ -252,6 +263,97 @@ namespace StarMap2010.Ui
 
             RenderHeaderAndSummary();
             LoadBasicsFields();
+        }
+
+        // ------------------------------------------------------------
+        // Friendly UI labels
+        // ------------------------------------------------------------
+
+        private static bool LooksLikeGuidOrJg(string s)
+        {
+            if (string.IsNullOrWhiteSpace(s)) return false;
+            s = s.Trim();
+
+            Guid g;
+            if (Guid.TryParse(s, out g)) return true;
+
+            if (s.StartsWith("JG-", StringComparison.OrdinalIgnoreCase))
+            {
+                string rest = s.Substring(3).Trim();
+                if (Guid.TryParse(rest, out g)) return true;
+            }
+
+            return false;
+        }
+
+        private string GetGateNameById(string gateId)
+        {
+            if (string.IsNullOrWhiteSpace(gateId)) return null;
+            gateId = gateId.Trim();
+
+            string cached;
+            if (_gateNameCache.TryGetValue(gateId, out cached))
+                return cached;
+
+            string name = null;
+            try
+            {
+                using (var conn = new SQLiteConnection("Data Source=" + _dbPath + ";Version=3;"))
+                using (var cmd = new SQLiteCommand("SELECT gate_name FROM jump_gates WHERE gate_id = @id LIMIT 1;", conn))
+                {
+                    cmd.Parameters.AddWithValue("@id", gateId);
+                    conn.Open();
+                    object v = cmd.ExecuteScalar();
+                    string s = (v != null && v != DBNull.Value) ? Convert.ToString(v) : null;
+                    if (!string.IsNullOrWhiteSpace(s))
+                        name = s.Trim();
+                }
+            }
+            catch { }
+
+            _gateNameCache[gateId] = name; // cache nulls too
+            return name;
+        }
+
+        private string FriendlyName(SystemObjectInfo o)
+        {
+            if (o == null) return "(unnamed)";
+
+            // Locked rule: system_root must display as “Solar System” in UI.
+            if (EqualsIgnore(o.ObjectKind, "system_root"))
+                return "Solar System";
+
+            string name = (o.DisplayName ?? "").Trim();
+
+            // Gate facilities: if display_name is just a guid/JG- guid, show jump_gates.gate_name instead.
+            if (IsGateFacilityObject(o))
+            {
+                string gid = (o.RelatedId ?? "").Trim();
+                bool bad = string.IsNullOrWhiteSpace(name)
+                           || LooksLikeGuidOrJg(name)
+                           || (!string.IsNullOrWhiteSpace(gid) && string.Equals(name, gid, StringComparison.OrdinalIgnoreCase));
+
+                if (bad)
+                {
+                    string gn = GetGateNameById(gid);
+                    if (!string.IsNullOrWhiteSpace(gn))
+                        name = gn;
+                    else
+                        name = "Gate Facility";
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(name)) name = "(unnamed)";
+            return name;
+        }
+
+        private string FriendlyLabel(SystemObjectInfo o)
+        {
+            if (o == null) return "(unnamed)";
+            string t = FriendlyName(o);
+            string k = (o.ObjectKind ?? "").Trim();
+            if (k.Length > 0) t += " [" + k + "]";
+            return t;
         }
 
         private Control BuildBasicsPanel()
@@ -344,19 +446,11 @@ namespace StarMap2010.Ui
 
             _pnlOrbitWrap.Controls.Add(_pnlOrbitBtns, 1, 0);
 
-            // Host move target list (drag an orbiter onto a host to change orbit_host_object_id)
-            _lstOrbitHosts = new ListBox
-            {
-                Dock = DockStyle.Fill,
-                IntegralHeight = false
-            };
-            _pnlOrbitWrap.Controls.Add(_lstOrbitHosts, 1, 1);
-
             _lblOrbitHelp = new Label
             {
                 AutoSize = true,
                 ForeColor = SystemColors.GrayText,
-                Text = "Drag to reorder.\r\nDrag an item onto a host to move it."
+                Text = "Drag to reorder.\r\nUse 'Orbits around' to change host."
             };
 
             _lblOrbitToast = new Label
@@ -378,9 +472,8 @@ namespace StarMap2010.Ui
             _pnlHelpWrap.Controls.Add(_lblOrbitHelp);
             _pnlHelpWrap.Controls.Add(_lblOrbitToast);
 
-            // Put help+toast under the hosts list by spanning (simpler than extra rows)
+            // With the host list hidden, keep help+toast in the right column.
             _pnlOrbitWrap.Controls.Add(_pnlHelpWrap, 1, 1);
-            _pnlHelpWrap.BringToFront();
             pnl.Controls.Add(_pnlOrbitWrap, 1, 3);
 
             // Notes under (full-width)
@@ -437,21 +530,14 @@ namespace StarMap2010.Ui
                 _lstOrbitOrder.SelectedIndexChanged += (s, e) => UpdateOrbitMoveButtons();
             }
 
-            if (_lstOrbitHosts != null)
-            {
-                _lstOrbitHosts.AllowDrop = true;
-                _lstOrbitHosts.DragEnter += OrbitHosts_DragEnter;
-                _lstOrbitHosts.DragOver += OrbitHosts_DragOver;
-                _lstOrbitHosts.DragDrop += OrbitHosts_DragDrop;
-            }
             if (_btnOrbitUp != null) _btnOrbitUp.Click += (s, e) => MoveOrbitSelection(-1);
             if (_btnOrbitDown != null) _btnOrbitDown.Click += (s, e) => MoveOrbitSelection(1);
 
             if (_cmbHost != null)
                 _cmbHost.SelectedIndexChanged += (s, e) =>
                 {
-                    if (_mode != ObjectEditorMode.Edit) { RefreshOrbitHostsList(); RefreshOrbitOrderList(); return; }
-                    if (_obj == null) { RefreshOrbitHostsList(); RefreshOrbitOrderList(); return; }
+                    if (_mode != ObjectEditorMode.Edit) { RefreshOrbitOrderList(); return; }
+                    if (_obj == null) { RefreshOrbitOrderList(); return; }
 
                     string newHostId = GetSelectedHostId();
                     string oldHostId = FirstNonEmpty(_obj.OrbitHostObjectId, _obj.ParentObjectId) ?? "";
@@ -479,7 +565,6 @@ namespace StarMap2010.Ui
                         MarkOrbitHostDirty(newHostId);
                     }
 
-                    RefreshOrbitHostsList();
                     RefreshOrbitOrderList();
                     UpdateOrbitMoveButtons();
                 };
@@ -559,6 +644,45 @@ namespace StarMap2010.Ui
             return g;
         }
 
+        private Control BuildGateLinksPanel()
+        {
+            var root = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 2,
+                Padding = new Padding(8)
+            };
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+            var buttons = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                AutoSize = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                Padding = new Padding(0, 0, 0, 6)
+            };
+
+            _btnAddGateLink = new Button { Text = "Add Link…", Width = 110, Height = 28 };
+            _btnRemoveGateLink = new Button { Text = "Remove Link", Width = 110, Height = 28 };
+
+            _btnAddGateLink.Click += (s, e) => GateLinks_Add();
+            _btnRemoveGateLink.Click += (s, e) => GateLinks_RemoveSelected();
+
+            buttons.Controls.Add(_btnAddGateLink);
+            buttons.Controls.Add(_btnRemoveGateLink);
+
+            _gridGateLinks = MakeGridGateLinks();
+            _gridGateLinks.Dock = DockStyle.Fill;
+            _gridGateLinks.MultiSelect = false;
+
+            root.Controls.Add(buttons, 0, 0);
+            root.Controls.Add(_gridGateLinks, 0, 1);
+
+            return root;
+        }
+
         private void ApplyMode()
         {
             bool isEdit = (_mode == ObjectEditorMode.Edit);
@@ -599,6 +723,9 @@ namespace StarMap2010.Ui
                 _btnCancel.DialogResult = DialogResult.Cancel;
             }
 
+            if (_btnAddGateLink != null) _btnAddGateLink.Enabled = isEdit;
+            if (_btnRemoveGateLink != null) _btnRemoveGateLink.Enabled = isEdit;
+
             AcceptButton = _btnPrimary;
             CancelButton = isEdit ? _btnCancel : _btnPrimary;
         }
@@ -611,7 +738,7 @@ namespace StarMap2010.Ui
 
         private void RenderHeaderAndSummary()
         {
-            string name = (_obj != null && !string.IsNullOrWhiteSpace(_obj.DisplayName)) ? _obj.DisplayName.Trim() : "(unnamed)";
+            string name = (_obj != null) ? FriendlyName(_obj) : "(unnamed)";
             string kind = (_obj != null && !string.IsNullOrWhiteSpace(_obj.ObjectKind)) ? _obj.ObjectKind.Trim() : "-";
 
             _hdr.Text = name + " [" + kind + "]";
@@ -645,6 +772,24 @@ namespace StarMap2010.Ui
 
             _txtName.Text = _obj.DisplayName ?? "";
 
+            // Gate facilities: if display_name is still a UUID/JG-UUID, show the gate_name instead,
+            // so a normal Save will seed system_objects.display_name to something human.
+            if (IsGateFacilityObject(_obj))
+            {
+                string cur = (_obj.DisplayName ?? "").Trim();
+                string gid = (_obj.RelatedId ?? "").Trim();
+                bool bad = string.IsNullOrWhiteSpace(cur)
+                           || LooksLikeGuidOrJg(cur)
+                           || (!string.IsNullOrWhiteSpace(gid) && string.Equals(cur, gid, StringComparison.OrdinalIgnoreCase));
+
+                if (bad)
+                {
+                    string gn = GetGateNameById(gid);
+                    if (!string.IsNullOrWhiteSpace(gn))
+                        _txtName.Text = gn.Trim();
+                }
+            }
+
             string kind = (_obj.ObjectKind ?? "").Trim();
             int idx = _cmbKind.FindStringExact(kind);
             if (idx >= 0) _cmbKind.SelectedIndex = idx;
@@ -656,7 +801,6 @@ namespace StarMap2010.Ui
 
             PopulateHostDropdown();
             SelectHostInDropdown(FirstNonEmpty(_obj.OrbitHostObjectId, _obj.ParentObjectId));
-            RefreshOrbitHostsList();
 
             // Orbit order list
             RefreshOrbitOrderList();
@@ -682,10 +826,7 @@ namespace StarMap2010.Ui
                 if (o == null) continue;
                 if (string.Equals(o.ObjectId, _obj.ObjectId, StringComparison.Ordinal)) continue;
 
-                string text = (o.DisplayName ?? "").Trim();
-                if (text.Length == 0) text = "(unnamed)";
-                string okind = (o.ObjectKind ?? "").Trim();
-                if (okind.Length > 0) text += " [" + okind + "]";
+                string text = FriendlyLabel(o);
 
                 _cmbHost.Items.Add(new ComboItem { Id = o.ObjectId, Text = text });
             }
@@ -773,26 +914,36 @@ namespace StarMap2010.Ui
             {
                 string kind = (_obj.ObjectKind ?? "").Trim().ToLowerInvariant();
 
-                DataTable dtDetails;
-                if (kind == "planet" || kind == "dwarf_planet")
-                    dtDetails = QueryTable("SELECT * FROM planet_details WHERE object_id = @id;", _obj.ObjectId);
-                else if (kind == "moon")
-                    dtDetails = QueryTable("SELECT * FROM moon_details WHERE object_id = @id;", _obj.ObjectId);
-                else
-                    dtDetails = MakeSingleRow("info", "No kind-specific details table for: " + kind);
+                if (_gridDetails != null)
+                {
+                    DataTable dtDetails;
+                    if (kind == "planet" || kind == "dwarf_planet")
+                        dtDetails = QueryTable("SELECT * FROM planet_details WHERE object_id = @id;", _obj.ObjectId);
+                    else if (kind == "moon")
+                        dtDetails = QueryTable("SELECT * FROM moon_details WHERE object_id = @id;", _obj.ObjectId);
+                    else
+                        dtDetails = MakeSingleRow("info", "No kind-specific details table for: " + kind);
 
-                BindOneRowAsFriendlyProperties(_gridDetails, dtDetails, DetailsOrder);
+                    BindOneRowAsFriendlyProperties(_gridDetails, dtDetails, DetailsOrder);
+                }
 
-                var dtEnv = QueryTable("SELECT * FROM body_environment WHERE object_id = @id;", _obj.ObjectId);
-                BindOneRowAsFriendlyProperties(_gridEnv, dtEnv, EnvironmentOrder);
+                if (_gridEnv != null)
+                {
+                    var dtEnv = QueryTable("SELECT * FROM body_environment WHERE object_id = @id;", _obj.ObjectId);
+                    BindOneRowAsFriendlyProperties(_gridEnv, dtEnv, EnvironmentOrder);
+                }
 
-                var dtTer = QueryTable("SELECT * FROM terraform_constraints WHERE object_id = @id;", _obj.ObjectId);
-                BindOneRowAsFriendlyProperties(_gridTerraform, dtTer, TerraformOrder);
+                if (_gridTerraform != null)
+                {
+                    var dtTer = QueryTable("SELECT * FROM terraform_constraints WHERE object_id = @id;", _obj.ObjectId);
+                    BindOneRowAsFriendlyProperties(_gridTerraform, dtTer, TerraformOrder);
+                }
 
                 // Gate / Links
                 if (_gridGate != null && IsGateFacilityObject(_obj))
                 {
                     string gateId = FirstNonEmpty(_obj.RelatedId, _obj.ObjectId);
+                    EnsureJumpGateRowExists(gateId);
                     var dtGate = QueryTable("SELECT * FROM jump_gates WHERE gate_id = @id;", gateId);
                     BindOneRowAsFriendlyProperties(_gridGate, dtGate, GateOrder);
 
@@ -800,6 +951,8 @@ namespace StarMap2010.Ui
                     {
                         var dtLinks = QueryTable(
                             @"SELECT
+                                l.link_id AS link_id,
+                                CASE WHEN l.gate_a_id = @id THEN l.gate_b_id ELSE l.gate_a_id END AS other_gate_id,
                                 CASE WHEN l.gate_a_id = @id THEN sb.system_name ELSE sa.system_name END AS connected_system,
                                 l.status AS status,
                                 CASE WHEN l.is_bidirectional IS NULL THEN '' WHEN l.is_bidirectional = 0 THEN 'N' ELSE 'Y' END AS bi,
@@ -818,6 +971,10 @@ namespace StarMap2010.Ui
                             gateId);
                         _gridGateLinks.DataSource = dtLinks;
                         AutoSizeGrid(_gridGateLinks);
+
+                        // hide internal ids
+                        if (_gridGateLinks.Columns.Contains("link_id")) _gridGateLinks.Columns["link_id"].Visible = false;
+                        if (_gridGateLinks.Columns.Contains("other_gate_id")) _gridGateLinks.Columns["other_gate_id"].Visible = false;
                     }
                 }
 
@@ -870,6 +1027,278 @@ namespace StarMap2010.Ui
             }
 
             return dt;
+        }
+
+        private void EnsureJumpGateRowExists(string gateId)
+        {
+            if (string.IsNullOrWhiteSpace(_dbPath)) return;
+            if (string.IsNullOrWhiteSpace(gateId)) return;
+
+            using (var conn = new SQLiteConnection("Data Source=" + _dbPath + ";Version=3;"))
+            {
+                conn.Open();
+                using (var tx = conn.BeginTransaction())
+                {
+                    EnsureJumpGateRow(conn, tx, gateId);
+                    tx.Commit();
+                }
+            }
+        }
+
+        private string GetCurrentGateId()
+        {
+            return FirstNonEmpty(_obj != null ? _obj.RelatedId : null, _obj != null ? _obj.ObjectId : null);
+        }
+
+        private void ReloadGateLinksGrid()
+        {
+            if (_gridGateLinks == null) return;
+            if (_obj == null) return;
+            if (!IsGateFacilityObject(_obj)) return;
+
+            string gateId = GetCurrentGateId();
+            if (string.IsNullOrWhiteSpace(gateId)) return;
+
+            var dtLinks = QueryTable(
+                @"SELECT
+                    l.link_id AS link_id,
+                    CASE WHEN l.gate_a_id = @id THEN l.gate_b_id ELSE l.gate_a_id END AS other_gate_id,
+                    CASE WHEN l.gate_a_id = @id THEN sb.system_name ELSE sa.system_name END AS connected_system,
+                    l.status AS status,
+                    CASE WHEN l.is_bidirectional IS NULL THEN '' WHEN l.is_bidirectional = 0 THEN 'N' ELSE 'Y' END AS bi,
+                    l.transit_hours AS hours,
+                    l.toll_credits AS toll,
+                    l.active_from AS active_from,
+                    l.active_until AS active_until,
+                    l.notes AS notes
+                  FROM jump_gate_links l
+                  JOIN jump_gates ga ON ga.gate_id = l.gate_a_id
+                  JOIN jump_gates gb ON gb.gate_id = l.gate_b_id
+                  JOIN star_systems sa ON sa.system_id = ga.system_id
+                  JOIN star_systems sb ON sb.system_id = gb.system_id
+                  WHERE l.gate_a_id = @id OR l.gate_b_id = @id
+                  ORDER BY connected_system COLLATE NOCASE;",
+                gateId);
+
+            _gridGateLinks.DataSource = dtLinks;
+            AutoSizeGrid(_gridGateLinks);
+            if (_gridGateLinks.Columns.Contains("link_id")) _gridGateLinks.Columns["link_id"].Visible = false;
+            if (_gridGateLinks.Columns.Contains("other_gate_id")) _gridGateLinks.Columns["other_gate_id"].Visible = false;
+        }
+
+        private void GateLinks_Add()
+        {
+            if (_mode != ObjectEditorMode.Edit) return;
+            if (_obj == null) return;
+            if (!IsGateFacilityObject(_obj)) return;
+            if (string.IsNullOrWhiteSpace(_dbPath)) return;
+
+            string thisGateId = GetCurrentGateId();
+            if (string.IsNullOrWhiteSpace(thisGateId)) return;
+
+            // Candidate gates: any system_object that links to jump_gates, excluding self.
+            var candidates = new List<ComboItem>();
+            if (_all != null)
+            {
+                for (int i = 0; i < _all.Count; i++)
+                {
+                    var o = _all[i];
+                    if (o == null) continue;
+                    if (!IsGateFacilityObject(o)) continue;
+                    string gid = FirstNonEmpty(o.RelatedId, o.ObjectId);
+                    if (string.IsNullOrWhiteSpace(gid)) continue;
+                    if (string.Equals(gid, thisGateId, StringComparison.Ordinal)) continue;
+
+                    string label = (o.DisplayName ?? "(unnamed)").Trim();
+                    candidates.Add(new ComboItem { Id = gid, Text = label });
+                }
+            }
+
+            candidates.Sort(delegate (ComboItem a, ComboItem b)
+            {
+                return string.Compare(a != null ? a.Text : "", b != null ? b.Text : "", StringComparison.OrdinalIgnoreCase);
+            });
+
+            using (var dlg = new AddGateLinkDialog(candidates))
+            {
+                if (dlg.ShowDialog(this) != DialogResult.OK) return;
+                if (string.IsNullOrWhiteSpace(dlg.OtherGateId)) return;
+
+                string a = thisGateId;
+                string b = dlg.OtherGateId.Trim();
+                // canonical order for UNIQUE(gate_a_id, gate_b_id)
+                if (string.Compare(a, b, StringComparison.Ordinal) > 0)
+                {
+                    string tmp = a; a = b; b = tmp;
+                }
+
+                try
+                {
+                    using (var conn = new SQLiteConnection("Data Source=" + _dbPath + ";Version=3;"))
+                    {
+                        conn.Open();
+                        using (var tx = conn.BeginTransaction())
+                        {
+                            // ensure both gate rows exist
+                            EnsureJumpGateRow(conn, tx, thisGateId);
+                            EnsureJumpGateRow(conn, tx, dlg.OtherGateId);
+
+                            using (var cmd = new SQLiteCommand(
+                                @"INSERT INTO jump_gate_links
+                                    (link_id, gate_a_id, gate_b_id, status, is_bidirectional, transit_hours, toll_credits, notes)
+                                  VALUES
+                                    (@id, @a, @b, @status, @bi, @hours, @toll, @notes);", conn, tx))
+                            {
+                                cmd.Parameters.AddWithValue("@id", Guid.NewGuid().ToString());
+                                cmd.Parameters.AddWithValue("@a", a);
+                                cmd.Parameters.AddWithValue("@b", b);
+                                cmd.Parameters.AddWithValue("@status", (dlg.Status ?? "active").Trim());
+                                cmd.Parameters.AddWithValue("@bi", dlg.IsBidirectional ? 1 : 0);
+                                cmd.Parameters.AddWithValue("@hours", dlg.TransitHours);
+                                cmd.Parameters.AddWithValue("@toll", dlg.TollCredits);
+                                cmd.Parameters.AddWithValue("@notes", dlg.Notes ?? "");
+                                cmd.ExecuteNonQuery();
+                            }
+
+                            tx.Commit();
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(this, "Add link failed:\r\n\r\n" + ex.Message, "Add Link", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+            }
+
+            ReloadGateLinksGrid();
+        }
+
+        private void GateLinks_RemoveSelected()
+        {
+            if (_mode != ObjectEditorMode.Edit) return;
+            if (_gridGateLinks == null) return;
+            if (_gridGateLinks.CurrentRow == null) return;
+            if (string.IsNullOrWhiteSpace(_dbPath)) return;
+
+            object v = _gridGateLinks.CurrentRow.Cells["link_id"].Value;
+            string linkId = (v == null || v == DBNull.Value) ? null : Convert.ToString(v);
+            if (string.IsNullOrWhiteSpace(linkId)) return;
+
+            if (MessageBox.Show(this, "Remove this link?", "Remove Link", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                return;
+
+            try
+            {
+                using (var conn = new SQLiteConnection("Data Source=" + _dbPath + ";Version=3;"))
+                {
+                    conn.Open();
+                    using (var cmd = new SQLiteCommand("DELETE FROM jump_gate_links WHERE link_id = @id;", conn))
+                    {
+                        cmd.Parameters.AddWithValue("@id", linkId.Trim());
+                        cmd.ExecuteNonQuery();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "Remove link failed:\r\n\r\n" + ex.Message, "Remove Link", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            ReloadGateLinksGrid();
+        }
+
+        private sealed class AddGateLinkDialog : Form
+        {
+            private ComboBox _cmb;
+            private TextBox _txtStatus;
+            private CheckBox _chkBi;
+            private TextBox _txtHours;
+            private TextBox _txtToll;
+            private TextBox _txtNotes;
+            private Button _ok;
+            private Button _cancel;
+
+            public string OtherGateId { get; private set; }
+            public string Status { get; private set; }
+            public bool IsBidirectional { get; private set; }
+            public double TransitHours { get; private set; }
+            public long TollCredits { get; private set; }
+            public string Notes { get; private set; }
+
+            public AddGateLinkDialog(List<ComboItem> candidates)
+            {
+                StartPosition = FormStartPosition.CenterParent;
+                Text = "Add Gate Link";
+                Size = new Size(520, 340);
+                MinimumSize = new Size(520, 340);
+
+                var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 7, Padding = new Padding(12) };
+                root.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+                root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+                Controls.Add(root);
+
+                root.Controls.Add(new Label { Text = "Connect to:", AutoSize = true }, 0, 0);
+                _cmb = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
+                if (candidates != null)
+                {
+                    for (int i = 0; i < candidates.Count; i++) _cmb.Items.Add(candidates[i]);
+                }
+                if (_cmb.Items.Count > 0) _cmb.SelectedIndex = 0;
+                root.Controls.Add(_cmb, 1, 0);
+
+                root.Controls.Add(new Label { Text = "Status:", AutoSize = true }, 0, 1);
+                _txtStatus = new TextBox { Dock = DockStyle.Fill, Text = "active" };
+                root.Controls.Add(_txtStatus, 1, 1);
+
+                root.Controls.Add(new Label { Text = "Bidirectional:", AutoSize = true }, 0, 2);
+                _chkBi = new CheckBox { Dock = DockStyle.Left, Checked = true };
+                root.Controls.Add(_chkBi, 1, 2);
+
+                root.Controls.Add(new Label { Text = "Transit hours:", AutoSize = true }, 0, 3);
+                _txtHours = new TextBox { Dock = DockStyle.Fill, Text = "0" };
+                root.Controls.Add(_txtHours, 1, 3);
+
+                root.Controls.Add(new Label { Text = "Toll credits:", AutoSize = true }, 0, 4);
+                _txtToll = new TextBox { Dock = DockStyle.Fill, Text = "0" };
+                root.Controls.Add(_txtToll, 1, 4);
+
+                root.Controls.Add(new Label { Text = "Notes:", AutoSize = true }, 0, 5);
+                _txtNotes = new TextBox { Dock = DockStyle.Fill, Multiline = true, Height = 80, ScrollBars = ScrollBars.Vertical };
+                root.Controls.Add(_txtNotes, 1, 5);
+
+                var buttons = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, AutoSize = true };
+                _ok = new Button { Text = "OK", Width = 90, Height = 28 };
+                _cancel = new Button { Text = "Cancel", Width = 90, Height = 28, DialogResult = DialogResult.Cancel };
+                buttons.Controls.Add(_ok);
+                buttons.Controls.Add(_cancel);
+                root.Controls.Add(buttons, 0, 6);
+                root.SetColumnSpan(buttons, 2);
+
+                _ok.Click += (s, e) =>
+                {
+                    var sel = _cmb.SelectedItem as ComboItem;
+                    OtherGateId = (sel != null) ? (sel.Id ?? "") : "";
+                    Status = _txtStatus.Text ?? "";
+                    IsBidirectional = _chkBi.Checked;
+                    Notes = _txtNotes.Text ?? "";
+
+                    double hours;
+                    if (!double.TryParse(_txtHours.Text ?? "0", out hours)) hours = 0;
+                    TransitHours = hours;
+
+                    long toll;
+                    if (!long.TryParse(_txtToll.Text ?? "0", out toll)) toll = 0;
+                    TollCredits = toll;
+
+                    DialogResult = DialogResult.OK;
+                    Close();
+                };
+
+                AcceptButton = _ok;
+                CancelButton = _cancel;
+            }
         }
 
         private static void AutoSizeGrid(DataGridView g)
@@ -1858,8 +2287,8 @@ namespace StarMap2010.Ui
                 int ra = (a != null) ? a.RadialOrder : 0;
                 int rb = (b != null) ? b.RadialOrder : 0;
                 if (ra != rb) return ra.CompareTo(rb);
-                string na = (a != null ? a.DisplayName : "") ?? "";
-                string nb = (b != null ? b.DisplayName : "") ?? "";
+                string na = (a != null ? FriendlyName(a) : "") ?? "";
+                string nb = (b != null ? FriendlyName(b) : "") ?? "";
                 return string.Compare(na, nb, StringComparison.OrdinalIgnoreCase);
             });
 
@@ -1870,10 +2299,7 @@ namespace StarMap2010.Ui
                 var o = orbiters[i];
                 if (o == null) continue;
 
-                string t = (o.DisplayName ?? "").Trim();
-                if (t.Length == 0) t = "(unnamed)";
-                string k = (o.ObjectKind ?? "").Trim();
-                if (k.Length > 0) t += " [" + k + "]";
+                string t = FriendlyLabel(o);
 
                 var item = new OrbitItem { Id = o.ObjectId, HostId = hostId, Text = t };
                 _lstOrbitOrder.Items.Add(item);
@@ -1884,10 +2310,7 @@ namespace StarMap2010.Ui
 
             if (_obj != null && selectIndex < 0)
             {
-                string t = (_obj.DisplayName ?? "").Trim();
-                if (t.Length == 0) t = "(unnamed)";
-                string k = (_obj.ObjectKind ?? "").Trim();
-                if (k.Length > 0) t += " [" + k + "]";
+                string t = FriendlyLabel(_obj);
                 _lstOrbitOrder.Items.Add(new OrbitItem { Id = _obj.ObjectId, HostId = hostId, Text = t });
                 selectIndex = _lstOrbitOrder.Items.Count - 1;
             }
@@ -1926,22 +2349,17 @@ namespace StarMap2010.Ui
                 return;
             }
 
-            if (_lstOrbitOrder == null || _lstOrbitOrder.Items.Count <= 1 || _lstOrbitOrder.SelectedIndex < 0)
-            {
-                if (_btnOrbitUp != null) _btnOrbitUp.Visible = false;
-                if (_btnOrbitDown != null) _btnOrbitDown.Visible = false;
-            }
-            else
-            {
-                int idxSel = _lstOrbitOrder.SelectedIndex;
-                int count = _lstOrbitOrder.Items.Count;
+            // In edit mode, keep the buttons visible (better discoverability), but disable when not applicable.
+            if (_btnOrbitUp != null) _btnOrbitUp.Visible = true;
+            if (_btnOrbitDown != null) _btnOrbitDown.Visible = true;
+            if (_pnlOrbitBtns != null) _pnlOrbitBtns.Visible = true;
 
-                if (_btnOrbitUp != null) _btnOrbitUp.Visible = (idxSel > 0);
-                if (_btnOrbitDown != null) _btnOrbitDown.Visible = (idxSel < count - 1);
-            }
+            int count = (_lstOrbitOrder != null) ? _lstOrbitOrder.Items.Count : 0;
+            int idxSel = (_lstOrbitOrder != null) ? _lstOrbitOrder.SelectedIndex : -1;
 
-            if (_pnlOrbitBtns != null)
-                _pnlOrbitBtns.Visible = (_btnOrbitUp != null && _btnOrbitUp.Visible) || (_btnOrbitDown != null && _btnOrbitDown.Visible);
+            bool canMove = (count > 1 && idxSel >= 0);
+            if (_btnOrbitUp != null) _btnOrbitUp.Enabled = canMove && (idxSel > 0);
+            if (_btnOrbitDown != null) _btnOrbitDown.Enabled = canMove && (idxSel < count - 1);
         }
 
         private void MarkOrbitDirty()

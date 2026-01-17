@@ -12,6 +12,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Data.SQLite;
 using System.Windows.Forms;
 using StarMap2010.Models;
 using StarMap2010.Ui;
@@ -433,6 +434,82 @@ namespace StarMap2010
             }
         }
 
+        private void EnsureGateFacilityBackingRows(SystemObjectInfo o)
+        {
+            if (o == null) return;
+
+            // Gate facilities map 1-to-1 to jump_gates via related_table/related_id.
+            bool isGate = string.Equals(o.ObjectKind ?? "", "gate_facility", StringComparison.OrdinalIgnoreCase)
+                || string.Equals((o.RelatedTable ?? "").Trim(), "jump_gates", StringComparison.OrdinalIgnoreCase);
+
+            if (!isGate) return;
+
+            if (string.IsNullOrWhiteSpace(o.RelatedTable))
+                o.RelatedTable = "jump_gates";
+
+            if (string.IsNullOrWhiteSpace(o.RelatedId))
+                o.RelatedId = Guid.NewGuid().ToString();
+
+            // Ensure the jump_gates row exists so ObjectEditorForm can edit it immediately.
+            if (string.IsNullOrWhiteSpace(_dbPath)) return;
+
+            try
+            {
+                using (var conn = new SQLiteConnection("Data Source=" + _dbPath + ";Version=3;"))
+                {
+                    conn.Open();
+                    using (var tx = conn.BeginTransaction())
+                    {
+                        string govId = null;
+                        using (var cmdGov = new SQLiteCommand("SELECT government_id FROM star_systems WHERE system_id = @sid LIMIT 1;", conn, tx))
+                        {
+                            cmdGov.Parameters.AddWithValue("@sid", o.SystemId ?? "");
+                            object v = cmdGov.ExecuteScalar();
+                            if (v != null && v != DBNull.Value) govId = Convert.ToString(v);
+                        }
+
+                        if (string.IsNullOrWhiteSpace(govId)) govId = "GOV_UNALIGNED";
+
+                        // Generate a non-empty gate_name (unique per system)
+                        string gateName = DbMakeUniqueGateName(conn, tx, o.SystemId);
+
+                        // Insert backing row (including gate_name)
+                        using (var cmd = new SQLiteCommand(
+                            @"INSERT OR IGNORE INTO jump_gates
+                        (gate_id, system_id, gate_name, owner_government_id, gate_type, gate_class, gate_role, is_operational, is_primary)
+                      VALUES
+                        (@id, @sid, @gname, @gov, 'standard', 'standard', 'standard', 1, 0);", conn, tx))
+                        {
+                            cmd.Parameters.AddWithValue("@id", o.RelatedId ?? "");
+                            cmd.Parameters.AddWithValue("@sid", o.SystemId ?? "");
+                            cmd.Parameters.AddWithValue("@gname", gateName);
+                            cmd.Parameters.AddWithValue("@gov", govId);
+                            cmd.ExecuteNonQuery();
+                        }
+
+                        // If row already existed, ensure gate_name is not blank.
+                        using (var cmdFix = new SQLiteCommand(
+                            @"UPDATE jump_gates
+                      SET gate_name = @gname
+                      WHERE gate_id = @id
+                        AND (gate_name IS NULL OR TRIM(gate_name) = '');", conn, tx))
+                        {
+                            cmdFix.Parameters.AddWithValue("@id", o.RelatedId ?? "");
+                            cmdFix.Parameters.AddWithValue("@gname", gateName);
+                            cmdFix.ExecuteNonQuery();
+                        }
+
+                        tx.Commit();
+                    }
+                }
+            }
+            catch
+            {
+                // Non-fatal: the object can still be created; gate row will be created on save in ObjectEditorForm.
+            }
+        }
+
+
         // ------------------------------------------------------------
         // Cache helpers for orbit phrasing + Details panel
         // ------------------------------------------------------------
@@ -490,7 +567,9 @@ namespace StarMap2010
             using (var dlg = new SystemObjectEditorForm("Add Child", o))
             {
                 if (dlg.ShowDialog(this) != DialogResult.OK) return;
-                _objDao.Upsert(dlg.Result);
+                var res = dlg.Result;
+                EnsureGateFacilityBackingRows(res);
+                _objDao.Upsert(res);
             }
 
             ReloadTreeAndReselect(o.ObjectId);
@@ -516,7 +595,9 @@ namespace StarMap2010
             using (var dlg = new SystemObjectEditorForm("Add Sibling", o))
             {
                 if (dlg.ShowDialog(this) != DialogResult.OK) return;
-                _objDao.Upsert(dlg.Result);
+                var res = dlg.Result;
+                EnsureGateFacilityBackingRows(res);
+                _objDao.Upsert(res);
             }
 
             ReloadTreeAndReselect(o.ObjectId);
@@ -593,5 +674,98 @@ namespace StarMap2010
 
             return null;
         }
+
+        private string GetSystemName(SQLiteConnection conn, string systemId)
+        {
+            using (var cmd = new SQLiteCommand("SELECT system_name FROM star_systems WHERE system_id = @id LIMIT 1;", conn))
+            {
+                cmd.Parameters.AddWithValue("@id", systemId);
+                object v = cmd.ExecuteScalar();
+                return (v == null || v == DBNull.Value) ? null : Convert.ToString(v);
+            }
+        }
+
+        private string MakeUniqueGateName(SQLiteConnection conn, string systemId)
+        {
+            string sysName = GetSystemName(conn, systemId);
+            if (string.IsNullOrWhiteSpace(sysName)) sysName = "System";
+
+            string baseName = sysName.Trim() + " Gate";
+            string candidate = baseName;
+
+            // Collect existing gate names that match "Base", "Base 2", "Base 3", ...
+            using (var cmd = new SQLiteCommand(
+                "SELECT gate_name FROM jump_gates WHERE system_id = @sid AND gate_name IS NOT NULL AND TRIM(gate_name) <> '';", conn))
+            {
+                cmd.Parameters.AddWithValue("@sid", systemId);
+
+                var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                using (var r = cmd.ExecuteReader())
+                {
+                    while (r.Read())
+                    {
+                        used.Add(Convert.ToString(r["gate_name"]));
+                    }
+                }
+
+                if (!used.Contains(candidate))
+                    return candidate;
+
+                // Find next available numeric suffix
+                int n = 2;
+                while (true)
+                {
+                    candidate = baseName + " " + n.ToString();
+                    if (!used.Contains(candidate))
+                        return candidate;
+                    n++;
+                }
+            }
+        }
+
+        private string DbGetSystemName(SQLiteConnection conn, SQLiteTransaction tx, string systemId)
+        {
+            using (var cmd = new SQLiteCommand("SELECT system_name FROM star_systems WHERE system_id = @sid LIMIT 1;", conn, tx))
+            {
+                cmd.Parameters.AddWithValue("@sid", systemId ?? "");
+                object v = cmd.ExecuteScalar();
+                string s = (v != null && v != DBNull.Value) ? Convert.ToString(v) : null;
+                return string.IsNullOrWhiteSpace(s) ? null : s.Trim();
+            }
+        }
+
+        private bool DbGateNameExists(SQLiteConnection conn, SQLiteTransaction tx, string systemId, string gateName)
+        {
+            using (var cmd = new SQLiteCommand(
+                "SELECT 1 FROM jump_gates WHERE system_id = @sid AND LOWER(TRIM(gate_name)) = LOWER(TRIM(@name)) LIMIT 1;", conn, tx))
+            {
+                cmd.Parameters.AddWithValue("@sid", systemId ?? "");
+                cmd.Parameters.AddWithValue("@name", gateName ?? "");
+                object v = cmd.ExecuteScalar();
+                return (v != null && v != DBNull.Value);
+            }
+        }
+
+        private string DbMakeUniqueGateName(SQLiteConnection conn, SQLiteTransaction tx, string systemId)
+        {
+            string sysName = DbGetSystemName(conn, tx, systemId);
+            if (string.IsNullOrWhiteSpace(sysName)) sysName = "System";
+
+            string baseName = sysName.Trim() + " Gate";
+
+            if (!DbGateNameExists(conn, tx, systemId, baseName))
+                return baseName;
+
+            int n = 2;
+            while (true)
+            {
+                string candidate = baseName + " " + n.ToString();
+                if (!DbGateNameExists(conn, tx, systemId, candidate))
+                    return candidate;
+                n++;
+            }
+        }
+
+
     }
 }

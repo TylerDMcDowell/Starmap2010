@@ -189,17 +189,6 @@ namespace StarMap2010
                 Collapsed = false
             };
 
-            btnEditGates = new Button
-            {
-                Text = "Edit Gate Facility…",
-                Height = 30,
-                Enabled = false
-            };
-            StyleButton(btnEditGates);
-
-            EnsureToolTip().SetToolTip(btnEditGates,
-                "Select a star system on the map to edit its gate facility and routes.");
-
             rtbGateInfo = new RichTextBox
             {
                 ReadOnly = true,
@@ -211,16 +200,14 @@ namespace StarMap2010
 
             // Layout inside gates content panel
             _secGates.ContentPanel.Padding = new Padding(0, 8, 0, 8);
-            _secGates.ContentPanel.Controls.Add(btnEditGates);
             _secGates.ContentPanel.Controls.Add(rtbGateInfo);
 
             _secGates.ContentPanel.Resize += (s, e) =>
             {
                 int w = _secGates.ContentPanel.ClientSize.Width;
 
-                btnEditGates.SetBounds(0, 0, w, 30);
-                rtbGateInfo.SetBounds(0, btnEditGates.Bottom + 8, w,
-                    Math.Max(80, _secGates.ContentPanel.ClientSize.Height - (btnEditGates.Bottom + 8)));
+                rtbGateInfo.SetBounds(0, 0, w,
+                    Math.Max(80, _secGates.ContentPanel.ClientSize.Height));
             };
 
             // =========================================================
@@ -319,27 +306,6 @@ namespace StarMap2010
             };
 
             canvas.ShowGates = IsShowGatesEnabled();
-
-            btnEditGates.Click += (s, e) =>
-            {
-                if (selectedA == null) return;
-
-                using (var dlg = new GateEditorForm(_dbPath, selectedA.SystemId, systems))
-                {
-                    if (dlg.ShowDialog(this) == DialogResult.OK)
-                    {
-                        LoadGatesAndLinksFromDb();
-                        canvas.SetGateLinks(gateLinks);
-
-                        UpdateGateInfo(selectedA);
-
-                        // keep tree in sync (gate facility names come from gate cache)
-                        LoadSystemTree(selectedA.SystemId);
-
-                        canvas.Invalidate();
-                    }
-                }
-            };
 
             canvas.MouseWheel += Any_MouseWheelZoom;
             canvas.MouseDown += (s, e) => canvas.Focus();
