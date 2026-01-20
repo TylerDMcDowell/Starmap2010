@@ -27,6 +27,7 @@ namespace StarMap2010
         private ToolStripMenuItem mnuShowJumpGates;
         private ToolStripMenuItem mnuFilters;
         private ToolStripMenuItem mnuFilterGovernments;
+        private ToolStripMenuItem mnuWiki;
 
         private StarMap2010.Ui.CollapsibleSection _secGates;
         private StarMap2010.Ui.CollapsibleSection _secContents;

@@ -68,6 +68,17 @@ namespace StarMap2010
 
             BuildMenuViewFilters();
 
+            mnuWiki = new ToolStripMenuItem("&Wiki...");
+            mnuWiki.ShortcutKeys = Keys.Control | Keys.W;
+            mnuWiki.ShowShortcutKeys = false;
+            mnuWiki.Click += MnuWiki_Click;
+
+            mnuTools.DropDownItems.Add(new ToolStripSeparator());
+            mnuTools.DropDownItems.Add(mnuWiki);
+
+
+
+
             if (!menu.Items.Contains(mnuTools))
                 menu.Items.Insert(0, mnuTools);
 
@@ -356,6 +367,23 @@ namespace StarMap2010
                     ReloadAndRefresh();
             }
         }
+
+        private void MnuWiki_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                using (var f = new StarMap2010.Ui.WikiViewerForm(_dbPath))
+                {
+                    f.ShowDialog(this);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, ex.Message, "Wiki", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+
 
         private void InitializeComponent()
         {
