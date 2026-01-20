@@ -6,16 +6,26 @@
 //   Read-only viewer for StarMap Wiki content.
 //   Displays wiki pages stored in SQLite (wiki_pages, wiki_images).
 //
-// Layout (matches "corner images" sketch):
+// Layout (corner images):
 //   - Left: search + page list
 //   - Right:
 //       * Title across top
-//       * Below title: one content region that fills the form height
-//           - Right side: a vertical strip of images (0..N)
-//           - Left side: a single RichTextBox that fills to the bottom
+//       * Content region below title fills to bottom:
+//           - Right: vertical strip of images (0..N)
+//           - Left: single RichTextBox (fills to bottom)
+//
+// Rendering (Markdown-lite+):
+//   - Headings: #, ##, ###
+//   - Bullets: "- "
+//   - Bold: **text**
+//   - Italic: *text*
+//   - Blockquote: "> text" (indented + italic)
+//   - Code blocks: ``` ... ``` (monospace + shaded background)
+//   - Wiki links: [[page]] and [[page|display text]]
+//   - Better spacing: blank line creates paragraph break
 //
 // Notes:
-//   - Text does NOT flow under images. The text column stays narrower all the way down.
+//   - Text does NOT flow under images.
 //   - Multiple images require NO schema changes: wiki_images already supports many rows per page_id.
 //   - Uses ImagePreviewForm for click-to-enlarge (must exist in project).
 // ============================================================
@@ -25,7 +35,7 @@ using System.Collections.Generic;
 using System.Data.SQLite;
 using System.Drawing;
 using System.IO;
-using System.Text.RegularExpressions;
+using System.Text;
 using System.Windows.Forms;
 
 namespace StarMap2010.Ui
@@ -55,7 +65,7 @@ namespace StarMap2010.Ui
         private readonly Dictionary<string, string> _lookupToPageId =
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-        // Clickable [[links]] ranges in body
+        // Clickable link ranges in the body
         private readonly List<WikiLinkRange> _linkRanges = new List<WikiLinkRange>();
 
         // Split sizing
@@ -68,9 +78,25 @@ namespace StarMap2010.Ui
         private const int IMAGE_HEIGHT = 220;
         private const int CAPTION_HEIGHT = 38;
 
-        // Spacing tweaks to close title-to-content gap
+        // Spacing tweaks (tight title-to-content gap)
         private static readonly Padding RIGHT_ROOT_PADDING = new Padding(8);
         private static readonly Padding TITLE_PADDING = new Padding(4, 2, 4, 0);
+
+        // Rendering fonts/colors
+        private readonly Font _fontBody = new Font("Arial", 10f, FontStyle.Regular);
+        private readonly Font _fontBodyBold = new Font("Arial", 10f, FontStyle.Bold);
+        private readonly Font _fontBodyItalic = new Font("Arial", 10f, FontStyle.Italic);
+        private readonly Font _fontBodyBoldItalic = new Font("Arial", 10f, FontStyle.Bold | FontStyle.Italic);
+
+        private readonly Font _fontH1 = new Font("Arial", 16f, FontStyle.Bold);
+        private readonly Font _fontH2 = new Font("Arial", 14f, FontStyle.Bold);
+        private readonly Font _fontH3 = new Font("Arial", 12f, FontStyle.Bold);
+
+        private readonly Font _fontCode = new Font("Consolas", 9.5f, FontStyle.Regular);
+
+        private readonly Color _linkColor = Color.Blue;
+        private readonly Color _quoteColor = Color.FromArgb(80, 80, 80);
+        private readonly Color _codeBack = Color.FromArgb(245, 245, 245);
 
         public WikiViewerForm(string dbPath)
         {
@@ -149,7 +175,7 @@ namespace StarMap2010.Ui
             _imagesHost = new Panel();
             _imagesHost.Dock = DockStyle.Right;
             _imagesHost.Width = IMAGE_STRIP_WIDTH;
-            _imagesHost.Padding = new Padding(6, 0, 0, 0); // small gap between text and images
+            _imagesHost.Padding = new Padding(6, 0, 0, 0); // gap between text and images
             _imagesHost.Margin = new Padding(0);
             _imagesHost.Visible = false;
 
@@ -166,13 +192,15 @@ namespace StarMap2010.Ui
             _rtbBody = new RichTextBox();
             _rtbBody.Dock = DockStyle.Fill;
             _rtbBody.ReadOnly = true;
-            _rtbBody.BorderStyle = BorderStyle.None;
+            _rtbBody.BorderStyle = BorderStyle.FixedSingle;
             _rtbBody.DetectUrls = false;
             _rtbBody.BackColor = SystemColors.Window;
+            _rtbBody.Font = _fontBody;
             _rtbBody.Margin = new Padding(0);
             _rtbBody.MouseUp += RtbBody_MouseUp;
+            _rtbBody.MouseMove += RtbBody_MouseMove;
 
-            // Important: add fill first, then right-docked host (Dock order matters)
+            // Dock order matters: add Fill first, then Right
             content.Controls.Add(_rtbBody);
             content.Controls.Add(_imagesHost);
 
@@ -360,7 +388,7 @@ namespace StarMap2010.Ui
 
             body = StripLeadingH1(body);
 
-            RenderMarkdownLite(body);
+            RenderMarkdownPlus(body);
             LoadImagesForPage(pageId);
 
             // Scroll to top when switching pages
@@ -398,133 +426,450 @@ namespace StarMap2010.Ui
             return body;
         }
 
-        // -----------------------------
-        // Markdown-lite + [[links]]
-        // -----------------------------
-        private void RenderMarkdownLite(string markdown)
+        // ============================================================
+        // Rendering: Markdown-lite+
+        // ============================================================
+
+        private void RenderMarkdownPlus(string markdown)
         {
-            _rtbBody.Clear();
-            _rtbBody.SelectionBullet = false;
-            _linkRanges.Clear();
+            _rtbBody.SuspendLayout();
 
-            if (markdown == null) markdown = "";
-            var lines = markdown.Replace("\r\n", "\n").Replace("\r", "\n").Split('\n');
-
-            for (int i = 0; i < lines.Length; i++)
+            try
             {
-                string line = lines[i] ?? "";
+                _rtbBody.Clear();
+                _linkRanges.Clear();
+                _rtbBody.SelectionBullet = false;
+                _rtbBody.SelectionIndent = 0;
+                _rtbBody.SelectionHangingIndent = 0;
+                _rtbBody.SelectionBackColor = _rtbBody.BackColor;
+                _rtbBody.SelectionColor = _rtbBody.ForeColor;
 
-                if (line.StartsWith("### "))
-                {
-                    AppendHeading(line.Substring(4).Trim(), 12f);
-                    continue;
-                }
-                if (line.StartsWith("## "))
-                {
-                    AppendHeading(line.Substring(3).Trim(), 14f);
-                    continue;
-                }
-                if (line.StartsWith("# "))
-                {
-                    AppendHeading(line.Substring(2).Trim(), 16f);
-                    continue;
-                }
+                if (markdown == null) markdown = "";
 
-                if (line.StartsWith("- "))
-                {
-                    AppendBullet(line.Substring(2).Trim());
-                    continue;
-                }
+                string norm = markdown.Replace("\r\n", "\n").Replace("\r", "\n");
+                string[] lines = norm.Split('\n');
 
-                if (string.IsNullOrWhiteSpace(line))
-                {
-                    AppendParagraph("");
-                    continue;
-                }
+                bool inCode = false;
+                bool lastWasBlank = true;
 
-                AppendParagraph(line);
+                for (int i = 0; i < lines.Length; i++)
+                {
+                    string line = lines[i] ?? "";
+
+                    // Code fence
+                    if (IsFence(line))
+                    {
+                        inCode = !inCode;
+                        // Add a blank line around code blocks for readability
+                        AppendLineBreak();
+                        lastWasBlank = true;
+                        continue;
+                    }
+
+                    if (inCode)
+                    {
+                        AppendCodeLine(line);
+                        lastWasBlank = false;
+                        continue;
+                    }
+
+                    // Better spacing: treat blank as paragraph break (one extra line)
+                    if (string.IsNullOrWhiteSpace(line))
+                    {
+                        if (!lastWasBlank)
+                        {
+                            AppendLineBreak();
+                            AppendLineBreak();
+                        }
+                        lastWasBlank = true;
+                        continue;
+                    }
+
+                    lastWasBlank = false;
+
+                    // Headings
+                    if (StartsWithHeading(line, "### "))
+                    {
+                        AppendHeading(line.Substring(4).Trim(), _fontH3);
+                        AppendLineBreak();
+                        continue;
+                    }
+                    if (StartsWithHeading(line, "## "))
+                    {
+                        AppendHeading(line.Substring(3).Trim(), _fontH2);
+                        AppendLineBreak();
+                        continue;
+                    }
+                    if (StartsWithHeading(line, "# "))
+                    {
+                        AppendHeading(line.Substring(2).Trim(), _fontH1);
+                        AppendLineBreak();
+                        continue;
+                    }
+
+                    // Blockquote
+                    if (line.StartsWith("> "))
+                    {
+                        AppendBlockQuote(line.Substring(2));
+                        AppendLineBreak();
+                        continue;
+                    }
+
+                    // Bullets
+                    if (line.StartsWith("- "))
+                    {
+                        AppendBulletLine(line.Substring(2));
+                        continue;
+                    }
+
+                    // Normal paragraph line
+                    AppendParagraphLine(line);
+                }
             }
-
-            StyleWikiLinksInBody();
-        }
-
-        private void AppendHeading(string text, float size)
-        {
-            _rtbBody.SelectionStart = _rtbBody.TextLength;
-            _rtbBody.SelectionLength = 0;
-            _rtbBody.SelectionFont = new Font("Arial", size, FontStyle.Bold);
-            _rtbBody.SelectionBullet = false;
-            _rtbBody.AppendText(text + Environment.NewLine);
-            _rtbBody.SelectionFont = new Font("Arial", 10f, FontStyle.Regular);
-        }
-
-        private void AppendParagraph(string text)
-        {
-            _rtbBody.SelectionStart = _rtbBody.TextLength;
-            _rtbBody.SelectionLength = 0;
-            _rtbBody.SelectionBullet = false;
-            _rtbBody.SelectionFont = new Font("Arial", 10f, FontStyle.Regular);
-            _rtbBody.AppendText(text + Environment.NewLine);
-        }
-
-        private void AppendBullet(string text)
-        {
-            _rtbBody.SelectionStart = _rtbBody.TextLength;
-            _rtbBody.SelectionLength = 0;
-            _rtbBody.SelectionFont = new Font("Arial", 10f, FontStyle.Regular);
-            _rtbBody.SelectionBullet = true;
-            _rtbBody.AppendText(text + Environment.NewLine);
-            _rtbBody.SelectionBullet = false;
-        }
-
-        private void StyleWikiLinksInBody()
-        {
-            string text = _rtbBody.Text ?? "";
-            if (text.Length == 0) return;
-
-            _linkRanges.Clear();
-
-            var matches = Regex.Matches(text, @"\[\[([^\]\r\n]+)\]\]");
-            for (int i = 0; i < matches.Count; i++)
+            finally
             {
-                var m = matches[i];
-                if (!m.Success) continue;
-
-                string target = m.Groups[1].Value.Trim();
-                if (target.Length == 0) continue;
-
-                string resolvedPageId = ResolveTargetToPageId(target);
-                if (string.IsNullOrEmpty(resolvedPageId)) continue;
-
-                int start = m.Index;
-                int len = m.Length;
-
-                _linkRanges.Add(new WikiLinkRange(start, len, resolvedPageId, target));
-
-                _rtbBody.Select(start, len);
-                _rtbBody.SelectionColor = Color.Blue;
-                _rtbBody.SelectionFont = new Font(_rtbBody.SelectionFont ?? _rtbBody.Font, FontStyle.Underline);
+                _rtbBody.ResumeLayout();
             }
+        }
 
-            _rtbBody.Select(_rtbBody.TextLength, 0);
+        private static bool IsFence(string line)
+        {
+            if (line == null) return false;
+            line = line.Trim();
+            return line.StartsWith("```");
+        }
+
+        private static bool StartsWithHeading(string line, string prefix)
+        {
+            if (line == null) return false;
+            return line.StartsWith(prefix);
+        }
+
+        private void AppendHeading(string text, Font font)
+        {
+            SetSelectionDefaults();
+            _rtbBody.SelectionFont = font;
+            _rtbBody.SelectionBullet = false;
+            _rtbBody.SelectionIndent = 0;
+            _rtbBody.SelectionHangingIndent = 0;
             _rtbBody.SelectionColor = _rtbBody.ForeColor;
-            _rtbBody.SelectionFont = _rtbBody.Font;
+
+            AppendInline(text, _fontBodyBold, isQuote: false);
+        }
+
+        private void AppendParagraphLine(string text)
+        {
+            SetSelectionDefaults();
+            _rtbBody.SelectionFont = _fontBody;
+            _rtbBody.SelectionBullet = false;
+            _rtbBody.SelectionIndent = 0;
+            _rtbBody.SelectionHangingIndent = 0;
+            _rtbBody.SelectionColor = _rtbBody.ForeColor;
+
+            AppendInline(text, _fontBody, isQuote: false);
+            AppendLineBreak();
+        }
+
+        private void AppendBulletLine(string text)
+        {
+            SetSelectionDefaults();
+            _rtbBody.SelectionFont = _fontBody;
+            _rtbBody.SelectionBullet = true;
+            _rtbBody.SelectionIndent = 18;
+            _rtbBody.SelectionHangingIndent = 10;
+            _rtbBody.SelectionColor = _rtbBody.ForeColor;
+
+            AppendInline(text, _fontBody, isQuote: false);
+            AppendLineBreak();
+
+            // reset bullet mode for next lines
+            _rtbBody.SelectionBullet = false;
+            _rtbBody.SelectionIndent = 0;
+            _rtbBody.SelectionHangingIndent = 0;
+        }
+
+        private void AppendBlockQuote(string text)
+        {
+            SetSelectionDefaults();
+
+            _rtbBody.SelectionBullet = false;
+            _rtbBody.SelectionIndent = 24;
+            _rtbBody.SelectionHangingIndent = 0;
+            _rtbBody.SelectionColor = _quoteColor;
+
+            AppendInline(text, _fontBodyItalic, isQuote: true);
+
+            // reset indents/colors after quote line
+            _rtbBody.SelectionIndent = 0;
+            _rtbBody.SelectionHangingIndent = 0;
+            _rtbBody.SelectionColor = _rtbBody.ForeColor;
+        }
+
+        private void AppendCodeLine(string text)
+        {
+            SetSelectionDefaults();
+
+            _rtbBody.SelectionBullet = false;
+            _rtbBody.SelectionIndent = 12;
+            _rtbBody.SelectionHangingIndent = 0;
+            _rtbBody.SelectionFont = _fontCode;
+            _rtbBody.SelectionBackColor = _codeBack;
+            _rtbBody.SelectionColor = Color.Black;
+
+            // Code blocks do NOT parse links or emphasis
+            _rtbBody.AppendText((text ?? "") + Environment.NewLine);
+
+            // reset background for future normal text
+            _rtbBody.SelectionBackColor = _rtbBody.BackColor;
+            _rtbBody.SelectionIndent = 0;
+        }
+
+        private void AppendLineBreak()
+        {
+            _rtbBody.AppendText(Environment.NewLine);
+        }
+
+        private void SetSelectionDefaults()
+        {
+            _rtbBody.SelectionStart = _rtbBody.TextLength;
+            _rtbBody.SelectionLength = 0;
+            _rtbBody.SelectionFont = _fontBody;
+            _rtbBody.SelectionBackColor = _rtbBody.BackColor;
+            _rtbBody.SelectionColor = _rtbBody.ForeColor;
+        }
+
+        // ------------------------------------------------------------
+        // Inline parsing: links + bold/italic (+ optional inline code)
+        //   - Links: [[target]] or [[target|display]]
+        //   - Bold: **text**
+        //   - Italic: *text*
+        //   - Inline code: `code`  (not requested, but makes code nicer)
+        //
+        // Strategy: scan left-to-right for next token start.
+        // ------------------------------------------------------------
+        private void AppendInline(string raw, Font baseFont, bool isQuote)
+        {
+            if (raw == null) raw = "";
+
+            int i = 0;
+            while (i < raw.Length)
+            {
+                int nextLink = IndexOf(raw, "[[", i);
+                int nextBold = IndexOf(raw, "**", i);
+                int nextItalic = IndexOf(raw, "*", i);
+                int nextCode = IndexOf(raw, "`", i);
+
+                int next = MinPositive(nextLink, nextBold, nextItalic, nextCode);
+                if (next < 0)
+                {
+                    AppendRun(raw.Substring(i), baseFont, false, false, false, isQuote);
+                    break;
+                }
+
+                if (next > i)
+                    AppendRun(raw.Substring(i, next - i), baseFont, false, false, false, isQuote);
+
+                // Link
+                if (next == nextLink)
+                {
+                    int end = raw.IndexOf("]]", next + 2, StringComparison.Ordinal);
+                    if (end < 0)
+                    {
+                        AppendRun(raw.Substring(next), baseFont, false, false, false, isQuote);
+                        break;
+                    }
+
+                    string inner = raw.Substring(next + 2, end - (next + 2));
+                    string target = inner;
+                    string display = inner;
+
+                    int bar = inner.IndexOf('|');
+                    if (bar >= 0)
+                    {
+                        target = inner.Substring(0, bar).Trim();
+                        display = inner.Substring(bar + 1).Trim();
+                        if (display.Length == 0) display = target;
+                    }
+
+                    string resolved = ResolveTargetToPageId(target);
+
+                    if (!string.IsNullOrEmpty(resolved))
+                    {
+                        AppendLink(display, resolved, baseFont, isQuote);
+                    }
+                    else
+                    {
+                        // Unknown link target: just write display text (no link style)
+                        AppendRun(display, baseFont, false, false, false, isQuote);
+                    }
+
+                    i = end + 2;
+                    continue;
+                }
+
+                // Bold
+                if (next == nextBold)
+                {
+                    int end = raw.IndexOf("**", next + 2, StringComparison.Ordinal);
+                    if (end < 0)
+                    {
+                        AppendRun(raw.Substring(next), baseFont, false, false, false, isQuote);
+                        break;
+                    }
+
+                    string inner = raw.Substring(next + 2, end - (next + 2));
+                    AppendRun(inner, GetStyledFont(baseFont, bold: true, italic: false), true, false, false, isQuote);
+
+                    i = end + 2;
+                    continue;
+                }
+
+                // Inline code
+                if (next == nextCode)
+                {
+                    int end = raw.IndexOf("`", next + 1, StringComparison.Ordinal);
+                    if (end < 0)
+                    {
+                        AppendRun(raw.Substring(next), baseFont, false, false, false, isQuote);
+                        break;
+                    }
+
+                    string inner = raw.Substring(next + 1, end - (next + 1));
+                    AppendInlineCode(inner);
+
+                    i = end + 1;
+                    continue;
+                }
+
+                // Italic (single *)
+                if (next == nextItalic)
+                {
+                    // Avoid treating '**' as italic starter (handled above)
+                    if (next + 1 < raw.Length && raw[next + 1] == '*')
+                    {
+                        // It was bold token, but bold already handled earlier (tie goes to bold)
+                        AppendRun("*", baseFont, false, false, false, isQuote);
+                        i = next + 1;
+                        continue;
+                    }
+
+                    int end = raw.IndexOf("*", next + 1, StringComparison.Ordinal);
+                    if (end < 0)
+                    {
+                        AppendRun(raw.Substring(next), baseFont, false, false, false, isQuote);
+                        break;
+                    }
+
+                    string inner = raw.Substring(next + 1, end - (next + 1));
+                    AppendRun(inner, GetStyledFont(baseFont, bold: false, italic: true), false, true, false, isQuote);
+
+                    i = end + 1;
+                    continue;
+                }
+
+                // fallback
+                AppendRun(raw.Substring(next, 1), baseFont, false, false, false, isQuote);
+                i = next + 1;
+            }
+        }
+
+        private void AppendInlineCode(string text)
+        {
+            SetSelectionDefaults();
+            _rtbBody.SelectionFont = _fontCode;
+            _rtbBody.SelectionBackColor = _codeBack;
+            _rtbBody.SelectionColor = Color.Black;
+            _rtbBody.AppendText(text ?? "");
+            _rtbBody.SelectionBackColor = _rtbBody.BackColor;
+            _rtbBody.SelectionFont = _fontBody;
+            _rtbBody.SelectionColor = _rtbBody.ForeColor;
+        }
+
+        private Font GetStyledFont(Font baseFont, bool bold, bool italic)
+        {
+            // We keep Arial for normal text; code uses Consolas separately
+            if (bold && italic) return _fontBodyBoldItalic;
+            if (bold) return _fontBodyBold;
+            if (italic) return _fontBodyItalic;
+            return _fontBody;
+        }
+
+        private void AppendRun(string text, Font font, bool bold, bool italic, bool isLink, bool isQuote)
+        {
+            if (string.IsNullOrEmpty(text)) return;
+
+            SetSelectionDefaults();
+            _rtbBody.SelectionFont = font ?? _fontBody;
+
+            if (isQuote)
+                _rtbBody.SelectionColor = _quoteColor;
+            else
+                _rtbBody.SelectionColor = _rtbBody.ForeColor;
+
+            _rtbBody.AppendText(text);
+        }
+
+        private void AppendLink(string displayText, string pageId, Font baseFont, bool isQuote)
+        {
+            if (displayText == null) displayText = "";
+
+            int start = _rtbBody.TextLength;
+
+            SetSelectionDefaults();
+            _rtbBody.SelectionFont = new Font((baseFont ?? _fontBody), FontStyle.Underline | FontStyle.Bold);
+            _rtbBody.SelectionColor = _linkColor;
+
+            _rtbBody.AppendText(displayText);
+
+            int len = _rtbBody.TextLength - start;
+            if (len > 0)
+                _linkRanges.Add(new WikiLinkRange(start, len, pageId, displayText));
+
+            // reset style
+            SetSelectionDefaults();
+            _rtbBody.SelectionFont = _fontBody;
+            _rtbBody.SelectionColor = isQuote ? _quoteColor : _rtbBody.ForeColor;
+        }
+
+        private static int IndexOf(string s, string token, int start)
+        {
+            if (s == null || token == null) return -1;
+            return s.IndexOf(token, start, StringComparison.Ordinal);
+        }
+
+        private static int MinPositive(params int[] values)
+        {
+            int best = int.MaxValue;
+            bool found = false;
+            for (int i = 0; i < values.Length; i++)
+            {
+                int v = values[i];
+                if (v >= 0 && v < best)
+                {
+                    best = v;
+                    found = true;
+                }
+            }
+            return found ? best : -1;
         }
 
         private string ResolveTargetToPageId(string target)
         {
             if (string.IsNullOrEmpty(target)) return null;
 
-            string pageId;
-            if (_lookupToPageId.TryGetValue(target, out pageId))
-                return pageId;
-
             target = target.Trim();
+            if (target.Length == 0) return null;
+
+            string pageId;
             if (_lookupToPageId.TryGetValue(target, out pageId))
                 return pageId;
 
             return null;
         }
+
+        // ============================================================
+        // Link clicking + hover
+        // ============================================================
 
         private void RtbBody_MouseUp(object sender, MouseEventArgs e)
         {
@@ -547,6 +892,31 @@ namespace StarMap2010.Ui
             catch
             {
                 // ignore
+            }
+        }
+
+        private void RtbBody_MouseMove(object sender, MouseEventArgs e)
+        {
+            try
+            {
+                int idx = _rtbBody.GetCharIndexFromPosition(e.Location);
+                bool over = false;
+
+                for (int i = 0; i < _linkRanges.Count; i++)
+                {
+                    var lr = _linkRanges[i];
+                    if (idx >= lr.Start && idx < (lr.Start + lr.Length))
+                    {
+                        over = true;
+                        break;
+                    }
+                }
+
+                _rtbBody.Cursor = over ? Cursors.Hand : Cursors.IBeam;
+            }
+            catch
+            {
+                _rtbBody.Cursor = Cursors.IBeam;
             }
         }
 
@@ -583,9 +953,10 @@ namespace StarMap2010.Ui
             LoadPage(pageId);
         }
 
-        // -----------------------------
+        // ============================================================
         // Multiple images (right strip)
-        // -----------------------------
+        // ============================================================
+
         private void LoadImagesForPage(string pageId)
         {
             _pnlImages.Controls.Clear();
@@ -628,7 +999,9 @@ namespace StarMap2010.Ui
                 string full = ResolveAssetPath(img.ImagePath);
                 if (!File.Exists(full)) continue;
 
-                _pnlImages.Controls.Add(BuildRightImageCard(img, full));
+                Control c = BuildRightImageCard(img, full);
+                if (c != null && c.Visible)
+                    _pnlImages.Controls.Add(c);
             }
 
             _imagesHost.Visible = (_pnlImages.Controls.Count > 0);
@@ -644,7 +1017,7 @@ namespace StarMap2010.Ui
             var pb = new PictureBox();
             pb.Dock = DockStyle.Top;
             pb.Height = IMAGE_HEIGHT;
-            pb.BorderStyle = BorderStyle.None;
+            pb.BorderStyle = BorderStyle.FixedSingle;
             pb.SizeMode = PictureBoxSizeMode.Zoom;
             pb.Cursor = Cursors.Hand;
 
@@ -667,8 +1040,7 @@ namespace StarMap2010.Ui
             }
             catch
             {
-                // If image fails to load, skip it
-                return new Panel { Width = 1, Height = 1, Visible = false };
+                return null;
             }
 
             pb.Click += (s, e) =>
@@ -704,9 +1076,10 @@ namespace StarMap2010.Ui
             return 0;
         }
 
-        // -----------------------------
+        // ============================================================
         // Helper types
-        // -----------------------------
+        // ============================================================
+
         private sealed class WikiListItem
         {
             public readonly string PageId;
