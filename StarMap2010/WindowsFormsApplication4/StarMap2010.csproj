@@ -69,6 +69,10 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Data\WikiDao.cs" />
+    <Compile Include="Models\WikiPageIndexVO.cs" />
+    <Compile Include="Models\WikiImageVO.cs" />
+    <Compile Include="Models\WikiPageVO.cs" />
     <Compile Include="Data\ObjectAttributesDao.cs" />
     <Compile Include="MainForm.OrbitText.cs">
       <SubType>Form</SubType>

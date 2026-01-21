@@ -56,7 +56,7 @@ namespace StarMap2010.Ui
         private ListBox _lstOrbitHosts;
         private Label _lblOrbitToast;
         private Timer _orbitToastTimer;
-        private bool _orbitDirty;
+        private bool _orbitDirty;  //It is used
         private HashSet<string> _dirtyOrbitHosts = new HashSet<string>(StringComparer.Ordinal);
 
         // Gate name cache (gate_id -> gate_name) for friendly labels

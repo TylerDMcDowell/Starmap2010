@@ -3,14 +3,15 @@
 // Project: StarMap2010
 //
 // Purpose:
-//   Read-only viewer for StarMap Wiki content.
+//   Read-only viewer + basic editor (v1) for StarMap Wiki content.
 //   Displays wiki pages stored in SQLite (wiki_pages, wiki_images).
 //
 // Layout (corner images):
 //   - Left: search + page list
 //   - Right:
-//       * Title across top
-//       * Content region below title fills to bottom:
+//       * Title across top (+ New/Edit/Save/Cancel/Delete)
+//       * Edit-mode ToolStrip (Bold/Italic/Quote/Bullet/Code/Link/Header)
+//       * Content region below fills to bottom:
 //           - Right: vertical strip of images (0..N)
 //           - Left: single RichTextBox (fills to bottom)
 //
@@ -19,30 +20,40 @@
 //   - Bullets: "- "
 //   - Bold: **text**
 //   - Italic: *text*
-//   - Blockquote: "> text" (indented + italic)
+//   - Blockquote: "> text" (indented + italic/gray)
 //   - Code blocks: ``` ... ``` (monospace + shaded background)
 //   - Wiki links: [[page]] and [[page|display text]]
 //   - Better spacing: blank line creates paragraph break
 //
+// Editor (v1):
+//   - New page (draft in-memory until Save; then GUID page_id + generated unique slug)
+//   - Edit mode shows RAW markdown in the same RichTextBox
+//   - Save writes to wiki_pages via WikiDao (slug preserved for existing pages)
+//   - Cancel reverts to last loaded DB state (draft cancels without DB row)
+//   - Delete removes page (and optionally its wiki_images rows)
+//
 // Notes:
 //   - Text does NOT flow under images.
-//   - Multiple images require NO schema changes: wiki_images already supports many rows per page_id.
+//   - Multiple images require NO schema changes: wiki_images supports many rows per page_id.
 //   - Uses ImagePreviewForm for click-to-enlarge (must exist in project).
 // ============================================================
 
 using System;
 using System.Collections.Generic;
-using System.Data.SQLite;
 using System.Drawing;
 using System.IO;
 using System.Text;
 using System.Windows.Forms;
+
+using StarMap2010.Dao;
+using StarMap2010.Models;
 
 namespace StarMap2010.Ui
 {
     public sealed class WikiViewerForm : Form
     {
         private readonly string _dbPath;
+        private readonly WikiDao _dao;
 
         private SplitContainer _split;
 
@@ -50,8 +61,28 @@ namespace StarMap2010.Ui
         private TextBox _txtSearch;
         private ListBox _lstPages;
 
-        // Right
+        // Right header (view/edit)
         private Label _lblTitle;
+        private TextBox _txtTitle;
+
+        private Button _btnNew;
+        private Button _btnEdit;
+        private Button _btnSave;
+        private Button _btnCancel;
+        private Button _btnDelete;
+
+        // Edit toolbar (edit mode only)
+        private ToolStrip _tsEdit;
+        private ToolStripButton _tsBold;
+        private ToolStripButton _tsItalic;
+        private ToolStripButton _tsQuote;
+        private ToolStripButton _tsBullet;
+        private ToolStripButton _tsCode;
+        private ToolStripButton _tsLink;
+        private ToolStripButton _tbImage;
+        private ToolStripDropDownButton _tsHeader;
+
+        // Right body
         private RichTextBox _rtbBody;
 
         // Right image strip (upper-right corner area; scrolls if too many)
@@ -59,13 +90,18 @@ namespace StarMap2010.Ui
         private FlowLayoutPanel _pnlImages;
 
         private string _currentPageId;
+        private string _currentSlug;   // preserved across edits (unless new page)
+
+        private bool _editMode;
+        private bool _dirty;
+        private bool _suppressDirty;
 
         // Page index for filtering + [[link]] nav
         private readonly List<WikiPageIndexItem> _allPages = new List<WikiPageIndexItem>();
         private readonly Dictionary<string, string> _lookupToPageId =
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-        // Clickable link ranges in the body
+        // Clickable link ranges in the rendered body
         private readonly List<WikiLinkRange> _linkRanges = new List<WikiLinkRange>();
 
         // Split sizing
@@ -98,9 +134,15 @@ namespace StarMap2010.Ui
         private readonly Color _quoteColor = Color.FromArgb(80, 80, 80);
         private readonly Color _codeBack = Color.FromArgb(245, 245, 245);
 
+        // Draft-new-page (not saved to DB until Save)
+        private bool _draftNewPage;
+        private string _draftPrevPageId;
+        private string _draftTempPageId; // a GUID used only for list selection/identity
+
         public WikiViewerForm(string dbPath)
         {
             _dbPath = dbPath ?? "";
+            _dao = new WikiDao(_dbPath);
 
             Text = "StarMap Wiki";
             StartPosition = FormStartPosition.CenterParent;
@@ -151,26 +193,162 @@ namespace StarMap2010.Ui
             _split.Panel1.Controls.Add(left);
 
             // ----------------------------
-            // Right: Title + Content region (fills)
+            // Right: Header (title + buttons) + ToolStrip + Content region (fills)
             // ----------------------------
             var rightRoot = new TableLayoutPanel();
             rightRoot.Dock = DockStyle.Fill;
             rightRoot.ColumnCount = 1;
             rightRoot.RowCount = 2;
             rightRoot.Padding = RIGHT_ROOT_PADDING;
-            rightRoot.RowStyles.Add(new RowStyle(SizeType.AutoSize));      // title
+            rightRoot.RowStyles.Add(new RowStyle(SizeType.AutoSize));      // header
             rightRoot.RowStyles.Add(new RowStyle(SizeType.Percent, 100f)); // content fill
 
+            // Header row: title (label or textbox) + buttons
+            var header = new TableLayoutPanel();
+            header.Dock = DockStyle.Top;
+            header.ColumnCount = 2;
+            header.RowCount = 1;
+            header.Margin = new Padding(0);
+            header.Padding = new Padding(0);
+            header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+
+            // Title label (view mode)
             _lblTitle = new Label();
             _lblTitle.Dock = DockStyle.Fill;
             _lblTitle.Font = new Font("Arial", 16f, FontStyle.Bold);
             _lblTitle.Height = 34;
             _lblTitle.Padding = TITLE_PADDING;
 
-            // Content region: right image strip + body fill
+            // Title textbox (edit mode)
+            _txtTitle = new TextBox();
+            _txtTitle.Dock = DockStyle.Fill;
+            _txtTitle.Font = new Font("Arial", 14f, FontStyle.Regular);
+            _txtTitle.Margin = new Padding(4, 6, 4, 0);
+            _txtTitle.Visible = false;
+            _txtTitle.TextChanged += (s, e) => MarkDirty();
+
+            // Title host panel allows us to swap label/textbox without changing layout
+            var titleHost = new Panel { Dock = DockStyle.Fill, Margin = new Padding(0) };
+            titleHost.Controls.Add(_lblTitle);
+            titleHost.Controls.Add(_txtTitle);
+
+            // Buttons
+            var btnHost = new FlowLayoutPanel();
+            btnHost.Dock = DockStyle.Fill;
+            btnHost.AutoSize = true;
+            btnHost.WrapContents = false;
+            btnHost.FlowDirection = FlowDirection.LeftToRight;
+            btnHost.Margin = new Padding(0, 4, 0, 0);
+            btnHost.Padding = new Padding(0);
+
+            _btnNew = new Button { Text = "New", Width = 72, Height = 26, Margin = new Padding(4, 0, 0, 0) };
+            _btnEdit = new Button { Text = "Edit", Width = 72, Height = 26, Margin = new Padding(4, 0, 0, 0) };
+            _btnSave = new Button { Text = "Save", Width = 72, Height = 26, Margin = new Padding(4, 0, 0, 0) };
+            _btnCancel = new Button { Text = "Cancel", Width = 72, Height = 26, Margin = new Padding(4, 0, 0, 0) };
+            _btnDelete = new Button { Text = "Delete", Width = 72, Height = 26, Margin = new Padding(4, 0, 0, 0) };
+
+            _btnNew.Click += (s, e) => NewPage();
+            _btnEdit.Click += (s, e) => EnterEditMode();
+            _btnSave.Click += (s, e) => SaveCurrent();
+            _btnCancel.Click += (s, e) => CancelEdit();
+            _btnDelete.Click += (s, e) => DeleteCurrent();
+
+            // Order (can be tweaked later; current matches your existing)
+            btnHost.Controls.Add(_btnDelete);
+            btnHost.Controls.Add(_btnNew);
+            btnHost.Controls.Add(_btnEdit);
+            btnHost.Controls.Add(_btnSave);
+            btnHost.Controls.Add(_btnCancel);
+
+            header.Controls.Add(titleHost, 0, 0);
+            header.Controls.Add(btnHost, 1, 0);
+
+            // Content region: edit ToolStrip + right image strip + body fill
             var content = new Panel();
             content.Dock = DockStyle.Fill;
             content.Margin = new Padding(0);
+
+            // ----------------------------
+            // Edit ToolStrip (hidden unless edit mode)
+            // ----------------------------
+            _tsEdit = new ToolStrip();
+            _tsEdit.Dock = DockStyle.Top;
+            _tsEdit.GripStyle = ToolStripGripStyle.Hidden;
+            _tsEdit.RenderMode = ToolStripRenderMode.System;
+            _tsEdit.Visible = false;
+
+            _tsBold = new ToolStripButton("B");
+            _tsBold.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            _tsBold.Font = new Font(_tsEdit.Font, FontStyle.Bold);
+            _tsBold.ToolTipText = "Bold (** **)";
+            _tsBold.Click += (s, e) => WrapSelection("**", "**");
+
+            _tsItalic = new ToolStripButton("I");
+            _tsItalic.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            _tsItalic.Font = new Font(_tsEdit.Font, FontStyle.Italic);
+            _tsItalic.ToolTipText = "Italic (* *)";
+            _tsItalic.Click += (s, e) => WrapSelection("*", "*");
+
+            _tsQuote = new ToolStripButton("Quote");
+            _tsQuote.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            _tsQuote.ToolTipText = "Blockquote (> )";
+            _tsQuote.Click += (s, e) => PrefixSelectedLines("> ");
+
+            _tsBullet = new ToolStripButton("Bullet");
+            _tsBullet.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            _tsBullet.ToolTipText = "Bullet (- )";
+            _tsBullet.Click += (s, e) => PrefixSelectedLines("- ");
+
+            _tsCode = new ToolStripButton("Code");
+            _tsCode.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            _tsCode.ToolTipText = "Code block (```)";
+            _tsCode.Click += (s, e) => WrapAsCodeBlock();
+
+            _tsLink = new ToolStripButton("Link");
+            _tsLink.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            _tsLink.ToolTipText = "Wiki link ([[page]] / [[page|text]])";
+            _tsLink.Click += (s, e) => InsertWikiLink();
+
+            _tsHeader = new ToolStripDropDownButton("H");
+            _tsHeader.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            _tsHeader.ToolTipText = "Header";
+
+            _tbImage = new ToolStripButton("Image…");
+            _tbImage.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            _tbImage.ToolTipText = "Add an image to this page (stored in wiki_images)";
+            _tbImage.Click += (s, e) => AddImageFromToolbar();
+
+
+            var miH1 = new ToolStripMenuItem("H1 ( # )");
+            miH1.Click += (s, e) => ApplyHeader(1);
+
+            var miH2 = new ToolStripMenuItem("H2 ( ## )");
+            miH2.Click += (s, e) => ApplyHeader(2);
+
+            var miH3 = new ToolStripMenuItem("H3 ( ### )");
+            miH3.Click += (s, e) => ApplyHeader(3);
+
+            var miClear = new ToolStripMenuItem("Clear header");
+            miClear.Click += (s, e) => ApplyHeader(0);
+
+            _tsHeader.DropDownItems.Add(miH1);
+            _tsHeader.DropDownItems.Add(miH2);
+            _tsHeader.DropDownItems.Add(miH3);
+            _tsHeader.DropDownItems.Add(new ToolStripSeparator());
+            _tsHeader.DropDownItems.Add(miClear);
+
+            _tsEdit.Items.Add(_tsBold);
+            _tsEdit.Items.Add(_tsItalic);
+            _tsEdit.Items.Add(new ToolStripSeparator());
+            _tsEdit.Items.Add(_tsQuote);
+            _tsEdit.Items.Add(_tsBullet);
+            _tsEdit.Items.Add(new ToolStripSeparator());
+            _tsEdit.Items.Add(_tsCode);
+            _tsEdit.Items.Add(_tsLink);
+            _tsEdit.Items.Add(new ToolStripSeparator());
+            _tsEdit.Items.Add(_tsHeader);
+            _tsEdit.Items.Add(_tbImage);
 
             _imagesHost = new Panel();
             _imagesHost.Dock = DockStyle.Right;
@@ -199,17 +377,23 @@ namespace StarMap2010.Ui
             _rtbBody.Margin = new Padding(0);
             _rtbBody.MouseUp += RtbBody_MouseUp;
             _rtbBody.MouseMove += RtbBody_MouseMove;
+            _rtbBody.TextChanged += (s, e) => { if (_editMode) MarkDirty(); };
 
-            // Dock order matters: add Fill first, then Right
-            content.Controls.Add(_rtbBody);
-            content.Controls.Add(_imagesHost);
+            // Dock order matters:
+            // - _tsEdit (Top) added after Fill so it sits above
+            // - _imagesHost (Right)
+            content.Controls.Add(_rtbBody);   // Fill
+            content.Controls.Add(_tsEdit);    // Top
+            content.Controls.Add(_imagesHost);// Right
 
-            rightRoot.Controls.Add(_lblTitle, 0, 0);
+            rightRoot.Controls.Add(header, 0, 0);
             rightRoot.Controls.Add(content, 0, 1);
 
             _split.Panel2.Controls.Add(rightRoot);
 
             Controls.Add(_split);
+
+            UpdateEditorUiState();
         }
 
         private void ApplySplitterSafe()
@@ -252,15 +436,37 @@ namespace StarMap2010.Ui
         {
             var it = _lstPages.SelectedItem as WikiListItem;
             if (it == null) return;
+
+            if (!ConfirmLoseEditsIfNeeded())
+            {
+                // revert selection
+                ReselectCurrentIfPossible();
+                return;
+            }
+
             LoadPage(it.PageId);
         }
 
-        private SQLiteConnection Open()
+        private void ReselectCurrentIfPossible()
         {
-            var conn = new SQLiteConnection("Data Source=" + _dbPath + ";Version=3;");
-            conn.Open();
-            return conn;
+            if (string.IsNullOrEmpty(_currentPageId)) return;
+
+            for (int i = 0; i < _lstPages.Items.Count; i++)
+            {
+                var it = _lstPages.Items[i] as WikiListItem;
+                if (it != null && string.Equals(it.PageId, _currentPageId, StringComparison.OrdinalIgnoreCase))
+                {
+                    _lstPages.SelectedIndexChanged -= LstPages_SelectedIndexChanged;
+                    try { _lstPages.SelectedIndex = i; }
+                    finally { _lstPages.SelectedIndexChanged += LstPages_SelectedIndexChanged; }
+                    return;
+                }
+            }
         }
+
+        // ============================================================
+        // DAO-backed data loading
+        // ============================================================
 
         private void LoadPageList()
         {
@@ -274,23 +480,32 @@ namespace StarMap2010.Ui
                 return;
             }
 
-            using (var conn = Open())
-            using (var cmd = new SQLiteCommand("SELECT page_id, slug, title, tags FROM wiki_pages ORDER BY title;", conn))
-            using (var r = cmd.ExecuteReader())
+            List<WikiPageIndexVO> pages;
+            try
             {
-                while (r.Read())
-                {
-                    var p = new WikiPageIndexItem();
-                    p.PageId = Convert.ToString(r["page_id"]);
-                    p.Slug = Convert.ToString(r["slug"]);
-                    p.Title = Convert.ToString(r["title"]);
-                    p.Tags = Convert.ToString(r["tags"]);
-                    _allPages.Add(p);
+                pages = _dao.GetPageIndex();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "Failed to load wiki page list:\n" + ex.Message, "Wiki",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
 
-                    AddLookupKey(p.PageId, p.PageId);
-                    AddLookupKey(p.Slug, p.PageId);
-                    AddLookupKey(p.Title, p.PageId);
-                }
+            for (int i = 0; i < pages.Count; i++)
+            {
+                var p = pages[i];
+                var idx = new WikiPageIndexItem();
+                idx.PageId = p.PageId;
+                idx.Slug = p.Slug;
+                idx.Title = p.Title;
+                idx.Tags = p.Tags;
+                idx.SortOrder = p.SortOrder;
+                _allPages.Add(idx);
+
+                AddLookupKey(idx.PageId, idx.PageId);
+                AddLookupKey(idx.Slug, idx.PageId);
+                AddLookupKey(idx.Title, idx.PageId);
             }
 
             ApplyFilter();
@@ -367,26 +582,30 @@ namespace StarMap2010.Ui
         {
             _currentPageId = pageId;
 
-            string title = "";
-            string body = "";
-
-            using (var conn = Open())
-            using (var cmd = new SQLiteCommand("SELECT title, body_markdown FROM wiki_pages WHERE page_id=@id LIMIT 1;", conn))
+            WikiPageVO p = null;
+            try
             {
-                cmd.Parameters.AddWithValue("@id", pageId);
-                using (var r = cmd.ExecuteReader())
-                {
-                    if (r.Read())
-                    {
-                        title = Convert.ToString(r["title"]);
-                        body = Convert.ToString(r["body_markdown"]);
-                    }
-                }
+                p = _dao.GetPageById(pageId);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "Failed to load page:\n" + ex.Message, "Wiki",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
             }
 
-            _lblTitle.Text = title ?? "";
+            string title = (p == null) ? "" : (p.Title ?? "");
+            string body = (p == null) ? "" : (p.BodyMarkdown ?? "");
+            _currentSlug = (p == null) ? "" : (p.Slug ?? "");
+
+            _lblTitle.Text = title;
+            _txtTitle.Text = title;
 
             body = StripLeadingH1(body);
+
+            _dirty = false;
+            _editMode = false;
+            UpdateEditorUiState();
 
             RenderMarkdownPlus(body);
             LoadImagesForPage(pageId);
@@ -427,11 +646,426 @@ namespace StarMap2010.Ui
         }
 
         // ============================================================
+        // Editor v1 (Steps 1-4)
+        // ============================================================
+
+        private void UpdateEditorUiState()
+        {
+            // View vs Edit
+            _btnEdit.Visible = !_editMode;
+            _btnNew.Visible = !_editMode;
+            _btnDelete.Visible = !_editMode;
+
+            _btnSave.Visible = _editMode;
+            _btnCancel.Visible = _editMode;
+
+            // Enable rules
+            _btnEdit.Enabled = !_editMode && !string.IsNullOrEmpty(_currentPageId);
+            _btnDelete.Enabled = !_editMode && !string.IsNullOrEmpty(_currentPageId);
+
+            _btnSave.Enabled = _editMode;
+            _btnCancel.Enabled = _editMode;
+
+            // Title swap
+            _lblTitle.Visible = !_editMode;
+            _txtTitle.Visible = _editMode;
+
+            // Text editability
+            _rtbBody.ReadOnly = !_editMode;
+            _txtTitle.ReadOnly = !_editMode;
+
+            // Edit ToolStrip
+            if (_tsEdit != null)
+                _tsEdit.Visible = _editMode;
+        }
+
+        private void MarkDirty()
+        {
+            if (_suppressDirty) return;
+            if (!_editMode) return;
+            _dirty = true;
+        }
+
+        private bool ConfirmLoseEditsIfNeeded()
+        {
+            if (!_editMode) return true;
+            if (!_dirty) return true;
+
+            var res = MessageBox.Show(this,
+                "You have unsaved changes.\n\nSave them?",
+                "Wiki",
+                MessageBoxButtons.YesNoCancel,
+                MessageBoxIcon.Question);
+
+            if (res == DialogResult.Cancel)
+                return false;
+
+            if (res == DialogResult.Yes)
+                return SaveCurrent();
+
+            // No: discard
+            _dirty = false;
+            _editMode = false;
+            UpdateEditorUiState();
+            return true;
+        }
+
+        private void EnterEditMode()
+        {
+            if (string.IsNullOrEmpty(_currentPageId))
+                return;
+
+            if (_editMode)
+                return;
+
+            // Load raw body from DB again (safe baseline)
+            WikiPageVO p = null;
+            try
+            {
+                p = _dao.GetPageById(_currentPageId);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "Failed to enter edit mode:\n" + ex.Message, "Wiki",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            string title = (p == null) ? "" : (p.Title ?? "");
+            string body = (p == null) ? "" : (p.BodyMarkdown ?? "");
+            _currentSlug = (p == null) ? _currentSlug : (p.Slug ?? _currentSlug);
+
+            _suppressDirty = true;
+            try
+            {
+                _editMode = true;
+                _dirty = false;
+
+                _txtTitle.Text = title;
+                _lblTitle.Text = title;
+
+                _rtbBody.Clear();
+                _rtbBody.SelectionBullet = false;
+                _rtbBody.SelectionIndent = 0;
+                _rtbBody.SelectionHangingIndent = 0;
+                _rtbBody.SelectionBackColor = _rtbBody.BackColor;
+                _rtbBody.SelectionColor = _rtbBody.ForeColor;
+                _rtbBody.Font = _fontBody;
+                _rtbBody.Text = body ?? "";
+            }
+            finally
+            {
+                _suppressDirty = false;
+            }
+
+            UpdateEditorUiState();
+            _txtTitle.Focus();
+            _txtTitle.SelectAll();
+        }
+
+        private void CancelEdit()
+        {
+            if (!_editMode)
+                return;
+
+            if (_dirty)
+            {
+                var res = MessageBox.Show(this,
+                    "Discard unsaved changes?",
+                    "Wiki",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question);
+
+                if (res != DialogResult.Yes)
+                    return;
+            }
+
+            // If this was a brand new draft, remove the temp page and go back
+            if (_draftNewPage)
+            {
+                _draftNewPage = false;
+                _dirty = false;
+                _editMode = false;
+                UpdateEditorUiState();
+
+                RemoveTempDraftListItem();
+
+                var backTo = _draftPrevPageId;
+                _draftPrevPageId = null;
+                _draftTempPageId = null;
+
+                if (!string.IsNullOrEmpty(backTo))
+                {
+                    SelectPageInList(backTo);
+                    LoadPage(backTo);
+                }
+                else
+                {
+                    // No previous page: just clear view
+                    _currentPageId = null;
+                    _currentSlug = null;
+                    _lblTitle.Text = "";
+                    _rtbBody.Clear();
+                    _pnlImages.Controls.Clear();
+                    _imagesHost.Visible = false;
+                }
+
+                return;
+            }
+
+            // Normal cancel: revert current page from DB
+            _dirty = false;
+            _editMode = false;
+            UpdateEditorUiState();
+
+            if (!string.IsNullOrEmpty(_currentPageId))
+                LoadPage(_currentPageId);
+        }
+
+        private void RemoveTempDraftListItem()
+        {
+            if (string.IsNullOrEmpty(_draftTempPageId)) return;
+
+            for (int i = 0; i < _lstPages.Items.Count; i++)
+            {
+                var it = _lstPages.Items[i] as WikiListItem;
+                if (it != null && string.Equals(it.PageId, _draftTempPageId, StringComparison.OrdinalIgnoreCase))
+                {
+                    _lstPages.Items.RemoveAt(i);
+                    break;
+                }
+            }
+        }
+
+        private bool SaveCurrent()
+        {
+            if (!_editMode)
+                return true;
+
+            // In draft mode, we don't have a real DB page yet.
+            // For normal mode, _currentPageId is a real page_id.
+            string pageId = _currentPageId;
+
+            if (string.IsNullOrEmpty(pageId))
+                return false;
+
+            string title = (_txtTitle.Text ?? "").Trim();
+            if (title.Length == 0)
+            {
+                MessageBox.Show(this, "Title is required.", "Wiki", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                _txtTitle.Focus();
+                return false;
+            }
+
+            string body = _rtbBody.Text ?? "";
+
+            // Determine slug:
+            // - existing page: preserve _currentSlug
+            // - draft: generate unique from title against current index
+            string slug = (_currentSlug ?? "").Trim();
+            if (_draftNewPage || slug.Length == 0)
+                slug = MakeUniqueSlug(MakeSlug(title));
+
+            // If this is a draft, we must assign a real page_id now
+            string realPageId = pageId;
+            if (_draftNewPage)
+                realPageId = Guid.NewGuid().ToString();
+
+            var p = new WikiPageVO
+            {
+                PageId = realPageId,
+                Slug = slug,
+                Title = title,
+                BodyMarkdown = body,
+                Tags = "",
+                SortOrder = _draftNewPage ? GetNextSortOrder() : 0
+            };
+
+            // Preserve existing sort order if not draft
+            if (!_draftNewPage)
+            {
+                for (int i = 0; i < _allPages.Count; i++)
+                {
+                    var idx = _allPages[i];
+                    if (idx != null && string.Equals(idx.PageId, realPageId, StringComparison.OrdinalIgnoreCase))
+                    {
+                        p.SortOrder = idx.SortOrder;
+                        break;
+                    }
+                }
+            }
+
+            try
+            {
+                _dao.UpsertPage(p);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "Save failed:\n" + ex.Message, "Wiki", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
+            }
+
+            // Draft becomes real page now
+            if (_draftNewPage)
+            {
+                _draftNewPage = false;
+                RemoveTempDraftListItem();
+                _draftTempPageId = null;
+                _draftPrevPageId = null;
+            }
+
+            _currentPageId = realPageId;
+            _currentSlug = slug;
+
+            _dirty = false;
+            _editMode = false;
+            UpdateEditorUiState();
+
+            // Refresh index list (title may have changed)
+            string keepId = _currentPageId;
+            LoadPageList();
+            SelectPageInList(keepId);
+
+            LoadPage(keepId);
+            return true;
+        }
+
+        private void SelectPageInList(string pageId)
+        {
+            if (string.IsNullOrEmpty(pageId)) return;
+
+            for (int i = 0; i < _lstPages.Items.Count; i++)
+            {
+                var it = _lstPages.Items[i] as WikiListItem;
+                if (it != null && string.Equals(it.PageId, pageId, StringComparison.OrdinalIgnoreCase))
+                {
+                    _lstPages.SelectedIndex = i;
+                    return;
+                }
+            }
+        }
+
+        private void NewPage()
+        {
+            if (!ConfirmLoseEditsIfNeeded())
+                return;
+
+            // Remember where we were so Cancel can go back
+            _draftPrevPageId = _currentPageId;
+
+            _draftNewPage = true;
+            _dirty = false;
+
+            // Create a temp id so we can select a placeholder entry in the list
+            _draftTempPageId = Guid.NewGuid().ToString();
+            _currentPageId = _draftTempPageId;
+            _currentSlug = ""; // will be generated on Save
+
+            // Add a temporary item at the top of the list (NOT in _allPages / NOT in DB)
+            _lstPages.SelectedIndexChanged -= LstPages_SelectedIndexChanged;
+            try
+            {
+                _lstPages.Items.Insert(0, new WikiListItem(_draftTempPageId, "(New Page — unsaved)"));
+                _lstPages.SelectedIndex = 0;
+            }
+            finally
+            {
+                _lstPages.SelectedIndexChanged += LstPages_SelectedIndexChanged;
+            }
+
+            // Enter edit mode with empty content
+            _suppressDirty = true;
+            try
+            {
+                _editMode = true;
+                UpdateEditorUiState();
+
+                _txtTitle.Text = "New Page";
+                _lblTitle.Text = "New Page";
+
+                _rtbBody.Clear();
+                _rtbBody.Text = "";
+            }
+            finally
+            {
+                _suppressDirty = false;
+            }
+
+            _txtTitle.Focus();
+            _txtTitle.SelectAll();
+        }
+
+        private int GetNextSortOrder()
+        {
+            int max = 0;
+            for (int i = 0; i < _allPages.Count; i++)
+            {
+                var p = _allPages[i];
+                if (p != null && p.SortOrder > max)
+                    max = p.SortOrder;
+            }
+            return max + 1;
+        }
+
+        private string MakeUniqueSlug(string baseSlug)
+        {
+            if (string.IsNullOrWhiteSpace(baseSlug))
+                baseSlug = "page";
+
+            // Check against current in-memory index keys (slug is included as a key)
+            string candidate = baseSlug;
+            int n = 2;
+
+            while (_lookupToPageId.ContainsKey(candidate))
+            {
+                candidate = baseSlug + "-" + n;
+                n++;
+            }
+
+            return candidate;
+        }
+
+        private static string MakeSlug(string title)
+        {
+            if (string.IsNullOrWhiteSpace(title))
+                return "page";
+
+            title = title.Trim().ToLowerInvariant();
+
+            var sb = new StringBuilder(title.Length);
+            bool dash = false;
+
+            for (int i = 0; i < title.Length; i++)
+            {
+                char c = title[i];
+
+                if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9'))
+                {
+                    sb.Append(c);
+                    dash = false;
+                }
+                else
+                {
+                    if (!dash)
+                    {
+                        sb.Append('-');
+                        dash = true;
+                    }
+                }
+            }
+
+            var s = sb.ToString().Trim('-');
+            if (s.Length == 0) s = "page";
+            return s;
+        }
+
+        // ============================================================
         // Rendering: Markdown-lite+
         // ============================================================
 
         private void RenderMarkdownPlus(string markdown)
         {
+            // Render mode uses formatting + link ranges
             _rtbBody.SuspendLayout();
 
             try
@@ -639,13 +1273,11 @@ namespace StarMap2010.Ui
         }
 
         // ------------------------------------------------------------
-        // Inline parsing: links + bold/italic (+ optional inline code)
+        // Inline parsing: links + bold/italic (+ inline code)
         //   - Links: [[target]] or [[target|display]]
         //   - Bold: **text**
         //   - Italic: *text*
-        //   - Inline code: `code`  (not requested, but makes code nicer)
-        //
-        // Strategy: scan left-to-right for next token start.
+        //   - Inline code: `code`
         // ------------------------------------------------------------
         private void AppendInline(string raw, Font baseFont, bool isQuote)
         {
@@ -662,12 +1294,12 @@ namespace StarMap2010.Ui
                 int next = MinPositive(nextLink, nextBold, nextItalic, nextCode);
                 if (next < 0)
                 {
-                    AppendRun(raw.Substring(i), baseFont, false, false, false, isQuote);
+                    AppendRun(raw.Substring(i), baseFont, isQuote);
                     break;
                 }
 
                 if (next > i)
-                    AppendRun(raw.Substring(i, next - i), baseFont, false, false, false, isQuote);
+                    AppendRun(raw.Substring(i, next - i), baseFont, isQuote);
 
                 // Link
                 if (next == nextLink)
@@ -675,7 +1307,7 @@ namespace StarMap2010.Ui
                     int end = raw.IndexOf("]]", next + 2, StringComparison.Ordinal);
                     if (end < 0)
                     {
-                        AppendRun(raw.Substring(next), baseFont, false, false, false, isQuote);
+                        AppendRun(raw.Substring(next), baseFont, isQuote);
                         break;
                     }
 
@@ -700,7 +1332,7 @@ namespace StarMap2010.Ui
                     else
                     {
                         // Unknown link target: just write display text (no link style)
-                        AppendRun(display, baseFont, false, false, false, isQuote);
+                        AppendRun(display, baseFont, isQuote);
                     }
 
                     i = end + 2;
@@ -713,12 +1345,12 @@ namespace StarMap2010.Ui
                     int end = raw.IndexOf("**", next + 2, StringComparison.Ordinal);
                     if (end < 0)
                     {
-                        AppendRun(raw.Substring(next), baseFont, false, false, false, isQuote);
+                        AppendRun(raw.Substring(next), baseFont, isQuote);
                         break;
                     }
 
                     string inner = raw.Substring(next + 2, end - (next + 2));
-                    AppendRun(inner, GetStyledFont(baseFont, bold: true, italic: false), true, false, false, isQuote);
+                    AppendRun(inner, _fontBodyBold, isQuote);
 
                     i = end + 2;
                     continue;
@@ -730,7 +1362,7 @@ namespace StarMap2010.Ui
                     int end = raw.IndexOf("`", next + 1, StringComparison.Ordinal);
                     if (end < 0)
                     {
-                        AppendRun(raw.Substring(next), baseFont, false, false, false, isQuote);
+                        AppendRun(raw.Substring(next), baseFont, isQuote);
                         break;
                     }
 
@@ -744,11 +1376,10 @@ namespace StarMap2010.Ui
                 // Italic (single *)
                 if (next == nextItalic)
                 {
-                    // Avoid treating '**' as italic starter (handled above)
+                    // Avoid treating '**' as italic starter
                     if (next + 1 < raw.Length && raw[next + 1] == '*')
                     {
-                        // It was bold token, but bold already handled earlier (tie goes to bold)
-                        AppendRun("*", baseFont, false, false, false, isQuote);
+                        AppendRun("*", baseFont, isQuote);
                         i = next + 1;
                         continue;
                     }
@@ -756,19 +1387,18 @@ namespace StarMap2010.Ui
                     int end = raw.IndexOf("*", next + 1, StringComparison.Ordinal);
                     if (end < 0)
                     {
-                        AppendRun(raw.Substring(next), baseFont, false, false, false, isQuote);
+                        AppendRun(raw.Substring(next), baseFont, isQuote);
                         break;
                     }
 
                     string inner = raw.Substring(next + 1, end - (next + 1));
-                    AppendRun(inner, GetStyledFont(baseFont, bold: false, italic: true), false, true, false, isQuote);
+                    AppendRun(inner, _fontBodyItalic, isQuote);
 
                     i = end + 1;
                     continue;
                 }
 
-                // fallback
-                AppendRun(raw.Substring(next, 1), baseFont, false, false, false, isQuote);
+                AppendRun(raw.Substring(next, 1), baseFont, isQuote);
                 i = next + 1;
             }
         }
@@ -785,27 +1415,13 @@ namespace StarMap2010.Ui
             _rtbBody.SelectionColor = _rtbBody.ForeColor;
         }
 
-        private Font GetStyledFont(Font baseFont, bool bold, bool italic)
-        {
-            // We keep Arial for normal text; code uses Consolas separately
-            if (bold && italic) return _fontBodyBoldItalic;
-            if (bold) return _fontBodyBold;
-            if (italic) return _fontBodyItalic;
-            return _fontBody;
-        }
-
-        private void AppendRun(string text, Font font, bool bold, bool italic, bool isLink, bool isQuote)
+        private void AppendRun(string text, Font font, bool isQuote)
         {
             if (string.IsNullOrEmpty(text)) return;
 
             SetSelectionDefaults();
             _rtbBody.SelectionFont = font ?? _fontBody;
-
-            if (isQuote)
-                _rtbBody.SelectionColor = _quoteColor;
-            else
-                _rtbBody.SelectionColor = _rtbBody.ForeColor;
-
+            _rtbBody.SelectionColor = isQuote ? _quoteColor : _rtbBody.ForeColor;
             _rtbBody.AppendText(text);
         }
 
@@ -825,7 +1441,6 @@ namespace StarMap2010.Ui
             if (len > 0)
                 _linkRanges.Add(new WikiLinkRange(start, len, pageId, displayText));
 
-            // reset style
             SetSelectionDefaults();
             _rtbBody.SelectionFont = _fontBody;
             _rtbBody.SelectionColor = isQuote ? _quoteColor : _rtbBody.ForeColor;
@@ -868,11 +1483,12 @@ namespace StarMap2010.Ui
         }
 
         // ============================================================
-        // Link clicking + hover
+        // Link clicking + hover (rendered view)
         // ============================================================
 
         private void RtbBody_MouseUp(object sender, MouseEventArgs e)
         {
+            if (_editMode) return; // no navigation while editing
             if (e.Button != MouseButtons.Left) return;
 
             try
@@ -897,6 +1513,12 @@ namespace StarMap2010.Ui
 
         private void RtbBody_MouseMove(object sender, MouseEventArgs e)
         {
+            if (_editMode)
+            {
+                _rtbBody.Cursor = Cursors.IBeam;
+                return;
+            }
+
             try
             {
                 int idx = _rtbBody.GetCharIndexFromPosition(e.Location);
@@ -954,7 +1576,7 @@ namespace StarMap2010.Ui
         }
 
         // ============================================================
-        // Multiple images (right strip)
+        // Multiple images (right strip) - DAO-backed
         // ============================================================
 
         private void LoadImagesForPage(string pageId)
@@ -962,33 +1584,13 @@ namespace StarMap2010.Ui
             _pnlImages.Controls.Clear();
             _imagesHost.Visible = false;
 
-            var imgs = new List<WikiImageEx>();
+            List<WikiImageVO> imgs;
             try
             {
-                using (var conn = Open())
-                using (var cmd = new SQLiteCommand(
-                    "SELECT image_id, image_path, caption, sort_order FROM wiki_images WHERE page_id=@id ORDER BY sort_order, image_path;",
-                    conn))
-                {
-                    cmd.Parameters.AddWithValue("@id", pageId);
-                    using (var r = cmd.ExecuteReader())
-                    {
-                        while (r.Read())
-                        {
-                            imgs.Add(new WikiImageEx
-                            {
-                                ImageId = Convert.ToString(r["image_id"]),
-                                ImagePath = Convert.ToString(r["image_path"]),
-                                Caption = Convert.ToString(r["caption"]),
-                                SortOrder = SafeInt(r["sort_order"])
-                            });
-                        }
-                    }
-                }
+                imgs = _dao.GetImagesForPage(pageId);
             }
             catch
             {
-                // wiki_images might not exist yet; fail silently
                 return;
             }
 
@@ -1007,7 +1609,7 @@ namespace StarMap2010.Ui
             _imagesHost.Visible = (_pnlImages.Controls.Count > 0);
         }
 
-        private Control BuildRightImageCard(WikiImageEx img, string fullPath)
+        private Control BuildRightImageCard(WikiImageVO img, string fullPath)
         {
             var card = new Panel();
             card.Width = IMAGE_STRIP_WIDTH - 12;
@@ -1068,12 +1670,191 @@ namespace StarMap2010.Ui
             return Path.Combine(baseDir, relPath);
         }
 
-        private static int SafeInt(object o)
+        // ============================================================
+        // Edit ToolStrip helpers (edit mode only)
+        // ============================================================
+
+        private void WrapSelection(string left, string right)
         {
-            if (o == null || o == DBNull.Value) return 0;
-            int v;
-            if (int.TryParse(Convert.ToString(o), out v)) return v;
-            return 0;
+            if (!_editMode) return;
+
+            var rtb = _rtbBody;
+            int start = rtb.SelectionStart;
+            int len = rtb.SelectionLength;
+
+            string sel = (len > 0) ? rtb.SelectedText : "";
+
+            rtb.SelectedText = left + sel + right;
+
+            // put caret inside wrapper
+            rtb.SelectionStart = start + left.Length;
+            rtb.SelectionLength = sel.Length;
+            rtb.Focus();
+
+            MarkDirty();
+        }
+
+        private void WrapAsCodeBlock()
+        {
+            if (!_editMode) return;
+
+            var rtb = _rtbBody;
+            string sel = rtb.SelectionLength > 0 ? rtb.SelectedText : "";
+
+            if (string.IsNullOrEmpty(sel))
+            {
+                int start = rtb.SelectionStart;
+                rtb.SelectedText = "```\r\n\r\n```";
+                rtb.SelectionStart = start + 4; // after ```\r\n
+                rtb.SelectionLength = 0;
+                rtb.Focus();
+            }
+            else
+            {
+                rtb.SelectedText = "```\r\n" + sel + "\r\n```";
+                rtb.Focus();
+            }
+
+            MarkDirty();
+        }
+
+        private void PrefixSelectedLines(string prefix)
+        {
+            if (!_editMode) return;
+            if (prefix == null) prefix = "";
+
+            var rtb = _rtbBody;
+
+            int selStart = rtb.SelectionStart;
+            int selEnd = selStart + rtb.SelectionLength;
+
+            int lineStart = rtb.GetLineFromCharIndex(selStart);
+            int lineEnd = rtb.GetLineFromCharIndex(selEnd);
+
+            string[] lines = rtb.Lines;
+            if (lines == null || lines.Length == 0) return;
+
+            if (lineStart < 0) lineStart = 0;
+            if (lineEnd < 0) lineEnd = lineStart;
+            if (lineEnd >= lines.Length) lineEnd = lines.Length - 1;
+
+            for (int i = lineStart; i <= lineEnd; i++)
+            {
+                string l = lines[i] ?? "";
+                if (!l.StartsWith(prefix))
+                    lines[i] = prefix + l;
+            }
+
+            rtb.Lines = lines;
+
+            rtb.SelectionStart = selStart;
+            rtb.SelectionLength = Math.Max(0, selEnd - selStart);
+            rtb.Focus();
+
+            MarkDirty();
+        }
+
+        private void InsertWikiLink()
+        {
+            if (!_editMode) return;
+
+            var rtb = _rtbBody;
+            string sel = rtb.SelectionLength > 0 ? rtb.SelectedText : "";
+
+            string target = PromptForText("Link Target", "Enter the page id / slug / title:", "");
+            if (target == null) return; // cancel
+
+            target = target.Trim();
+            if (target.Length == 0) return;
+
+            string insert;
+            if (!string.IsNullOrEmpty(sel))
+                insert = "[[" + target + "|" + sel + "]]";
+            else
+                insert = "[[" + target + "]]";
+
+            rtb.SelectedText = insert;
+            rtb.Focus();
+
+            MarkDirty();
+        }
+
+        private void ApplyHeader(int level)
+        {
+            if (!_editMode) return;
+
+            var rtb = _rtbBody;
+
+            int selStart = rtb.SelectionStart;
+            int selEnd = selStart + rtb.SelectionLength;
+
+            int lineStart = rtb.GetLineFromCharIndex(selStart);
+            int lineEnd = rtb.GetLineFromCharIndex(selEnd);
+
+            string[] lines = rtb.Lines;
+            if (lines == null || lines.Length == 0) return;
+
+            if (lineStart < 0) lineStart = 0;
+            if (lineEnd < 0) lineEnd = lineStart;
+            if (lineEnd >= lines.Length) lineEnd = lines.Length - 1;
+
+            string prefix = (level > 0) ? (new string('#', level) + " ") : "";
+
+            for (int i = lineStart; i <= lineEnd; i++)
+            {
+                string clean = StripHeaderPrefix(lines[i]);
+                lines[i] = prefix + clean;
+            }
+
+            rtb.Lines = lines;
+            rtb.SelectionStart = selStart;
+            rtb.SelectionLength = Math.Max(0, selEnd - selStart);
+            rtb.Focus();
+
+            MarkDirty();
+        }
+
+        private static string StripHeaderPrefix(string line)
+        {
+            if (line == null) return "";
+            string t = line.TrimStart();
+            if (t.StartsWith("### ")) return t.Substring(4);
+            if (t.StartsWith("## ")) return t.Substring(3);
+            if (t.StartsWith("# ")) return t.Substring(2);
+            return t;
+        }
+
+        private string PromptForText(string title, string prompt, string defaultValue)
+        {
+            // Tiny VS2013-friendly input box
+            using (var f = new Form())
+            {
+                f.Text = title ?? "Input";
+                f.FormBorderStyle = FormBorderStyle.FixedDialog;
+                f.StartPosition = FormStartPosition.CenterParent;
+                f.MinimizeBox = false;
+                f.MaximizeBox = false;
+                f.Width = 420;
+                f.Height = 160;
+
+                var lbl = new Label { Left = 10, Top = 10, Width = 390, Height = 30, Text = prompt ?? "" };
+                var txt = new TextBox { Left = 10, Top = 45, Width = 390, Text = defaultValue ?? "" };
+
+                var btnOk = new Button { Text = "OK", Left = 245, Width = 75, Top = 80, DialogResult = DialogResult.OK };
+                var btnCancel = new Button { Text = "Cancel", Left = 325, Width = 75, Top = 80, DialogResult = DialogResult.Cancel };
+
+                f.Controls.Add(lbl);
+                f.Controls.Add(txt);
+                f.Controls.Add(btnOk);
+                f.Controls.Add(btnCancel);
+
+                f.AcceptButton = btnOk;
+                f.CancelButton = btnCancel;
+
+                var res = f.ShowDialog(this);
+                if (res != DialogResult.OK) return null;
+                return txt.Text;
+            }
         }
 
         // ============================================================
@@ -1103,13 +1884,6 @@ namespace StarMap2010.Ui
             public string Slug;
             public string Title;
             public string Tags;
-        }
-
-        private sealed class WikiImageEx
-        {
-            public string ImageId;
-            public string ImagePath;
-            public string Caption;
             public int SortOrder;
         }
 
@@ -1128,5 +1902,268 @@ namespace StarMap2010.Ui
                 Target = target;
             }
         }
+
+        private void DeleteCurrent()
+        {
+            // If draft, just discard it (same as cancel)
+            if (_draftNewPage)
+            {
+                CancelEdit();
+                return;
+            }
+
+            if (string.IsNullOrEmpty(_currentPageId))
+                return;
+
+            if (_editMode && _dirty)
+            {
+                var res0 = MessageBox.Show(this,
+                    "You have unsaved changes.\n\nDelete this page anyway?",
+                    "Wiki",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Warning);
+
+                if (res0 != DialogResult.Yes)
+                    return;
+            }
+
+            var res = MessageBox.Show(this,
+                "Delete this wiki page?\n\nThis removes it from the database.",
+                "Wiki",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning);
+
+            if (res != DialogResult.Yes)
+                return;
+
+            // Delete associated wiki_images rows too (recommended)
+            try
+            {
+                _dao.DeletePage(_currentPageId, deleteImagesToo: true);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "Delete failed:\n" + ex.Message, "Wiki",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            _currentPageId = null;
+            _currentSlug = null;
+            _dirty = false;
+            _editMode = false;
+            UpdateEditorUiState();
+
+            LoadPageList();
+
+            // Select next available page if any
+            if (_lstPages.Items.Count > 0)
+                _lstPages.SelectedIndex = 0;
+            else
+            {
+                _lblTitle.Text = "";
+                _rtbBody.Clear();
+                _pnlImages.Controls.Clear();
+                _imagesHost.Visible = false;
+            }
+        }
+
+        private void AddImageFromToolbar()
+        {
+            if (_editMode == false)
+            {
+                MessageBox.Show(this, "Click Edit first to add images.", "Wiki",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            if (string.IsNullOrEmpty(_currentPageId) || _draftNewPage)
+            {
+                MessageBox.Show(this, "Save the page first (so it has a real page_id), then add images.", "Wiki",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            using (var ofd = new OpenFileDialog())
+            {
+                ofd.Title = "Select image";
+                ofd.Filter = "Image Files|*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp|All Files|*.*";
+                ofd.CheckFileExists = true;
+                ofd.Multiselect = false;
+
+                if (ofd.ShowDialog(this) != DialogResult.OK)
+                    return;
+
+                string srcPath = ofd.FileName;
+
+                // Destination: bin\Debug\Assets\Wiki\Pages\<slug>\filename.ext
+                string slug = (_currentSlug ?? "").Trim();
+                if (string.IsNullOrEmpty(slug))
+                    slug = MakeSlug((_txtTitle.Text ?? "").Trim());
+
+                if (string.IsNullOrEmpty(slug))
+                    slug = "page";
+
+                string relDir = Path.Combine("Assets", "Wiki", "Pages", slug);
+                string destDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, relDir);
+                Directory.CreateDirectory(destDir);
+
+                string fileName = Path.GetFileName(srcPath);
+                string destPath = Path.Combine(destDir, fileName);
+
+                // Avoid overwriting: foo.png -> foo-2.png etc.
+                destPath = MakeUniqueFilePath(destPath);
+
+                try
+                {
+                    File.Copy(srcPath, destPath, false);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(this, "Failed to copy image:\n" + ex.Message, "Wiki",
+                        MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+
+                // Store relative path with forward slashes (matches your convention)
+                string relPath = Path.Combine(relDir, Path.GetFileName(destPath))
+                    .Replace(Path.DirectorySeparatorChar, '/');
+
+                string caption = PromptText(this, "Caption (optional):", "Add Image", "");
+                int sortOrder = GetNextImageSortOrder(_currentPageId);
+
+                try
+                {
+                    InsertWikiImageRow(
+                        imageId: Guid.NewGuid().ToString(),
+                        pageId: _currentPageId,
+                        imagePath: relPath,
+                        caption: caption,
+                        sortOrder: sortOrder
+                    );
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(this, "Failed to insert wiki_images row:\n" + ex.Message, "Wiki",
+                        MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+
+                // Refresh strip now
+                LoadImagesForPage(_currentPageId);
+            }
+        }
+
+        private static string MakeUniqueFilePath(string path)
+        {
+            if (!File.Exists(path)) return path;
+
+            string dir = Path.GetDirectoryName(path);
+            string name = Path.GetFileNameWithoutExtension(path);
+            string ext = Path.GetExtension(path);
+
+            int n = 2;
+            while (true)
+            {
+                string candidate = Path.Combine(dir, name + "-" + n + ext);
+                if (!File.Exists(candidate)) return candidate;
+                n++;
+            }
+        }
+
+        private int GetNextImageSortOrder(string pageId)
+        {
+            int max = -1;
+
+            try
+            {
+                using (var conn = new System.Data.SQLite.SQLiteConnection("Data Source=" + _dbPath + ";Version=3;"))
+                {
+                    conn.Open();
+                    using (var cmd = new System.Data.SQLite.SQLiteCommand(
+                        "SELECT COALESCE(MAX(sort_order), -1) FROM wiki_images WHERE page_id=@id;", conn))
+                    {
+                        cmd.Parameters.AddWithValue("@id", pageId);
+                        object o = cmd.ExecuteScalar();
+                        int v;
+                        if (o != null && int.TryParse(Convert.ToString(o), out v))
+                            max = v;
+                    }
+                }
+            }
+            catch
+            {
+                // if table missing / error, default
+                max = -1;
+            }
+
+            return max + 1;
+        }
+
+        private void InsertWikiImageRow(string imageId, string pageId, string imagePath, string caption, int sortOrder)
+        {
+            using (var conn = new System.Data.SQLite.SQLiteConnection("Data Source=" + _dbPath + ";Version=3;"))
+            {
+                conn.Open();
+                using (var cmd = new System.Data.SQLite.SQLiteCommand(
+                    "INSERT INTO wiki_images (image_id, page_id, image_path, caption, sort_order) " +
+                    "VALUES (@iid, @pid, @path, @cap, @ord);", conn))
+                {
+                    cmd.Parameters.AddWithValue("@iid", imageId);
+                    cmd.Parameters.AddWithValue("@pid", pageId);
+                    cmd.Parameters.AddWithValue("@path", imagePath ?? "");
+                    cmd.Parameters.AddWithValue("@cap", caption ?? "");
+                    cmd.Parameters.AddWithValue("@ord", sortOrder);
+                    cmd.ExecuteNonQuery();
+                }
+            }
+        }
+
+        private static string PromptText(IWin32Window owner, string text, string caption, string defaultValue)
+        {
+            using (var f = new Form())
+            {
+                f.Text = caption ?? "Input";
+                f.FormBorderStyle = FormBorderStyle.FixedDialog;
+                f.StartPosition = FormStartPosition.CenterParent;
+                f.MinimizeBox = false;
+                f.MaximizeBox = false;
+                f.ClientSize = new Size(420, 120);
+
+                var lbl = new Label();
+                lbl.AutoSize = false;
+                lbl.Text = text ?? "";
+                lbl.SetBounds(10, 10, 400, 18);
+
+                var tb = new TextBox();
+                tb.Text = defaultValue ?? "";
+                tb.SetBounds(10, 34, 400, 22);
+
+                var ok = new Button();
+                ok.Text = "OK";
+                ok.DialogResult = DialogResult.OK;
+                ok.SetBounds(254, 74, 75, 26);
+
+                var cancel = new Button();
+                cancel.Text = "Cancel";
+                cancel.DialogResult = DialogResult.Cancel;
+                cancel.SetBounds(335, 74, 75, 26);
+
+                f.Controls.Add(lbl);
+                f.Controls.Add(tb);
+                f.Controls.Add(ok);
+                f.Controls.Add(cancel);
+
+                f.AcceptButton = ok;
+                f.CancelButton = cancel;
+
+                return f.ShowDialog(owner) == DialogResult.OK
+                    ? (tb.Text ?? "")
+                    : null;
+            }
+        }
+
+
+
     }
 }

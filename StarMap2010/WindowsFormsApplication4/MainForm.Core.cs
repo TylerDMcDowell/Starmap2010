@@ -51,7 +51,7 @@ namespace StarMap2010
 
         //private Label lblGateInfo;
 
-        private Button btnNotes;
+        private Button btnNotes;  //It is used
         private Label lblGateSummary;
 
         private RichTextBox rtbGateInfo;
