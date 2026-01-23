@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Data.SQLite;
 using System.Drawing;
@@ -245,6 +246,9 @@ namespace StarMap2010
                 grid.EndEdit();
                 this.Validate();
 
+                // Collect government_id renames (old -> new)
+                var renames = new List<Tuple<string, string>>();
+
                 foreach (DataRow row in dt.Rows)
                 {
                     if (row.RowState == DataRowState.Deleted) continue;
@@ -253,10 +257,8 @@ namespace StarMap2010
                     string name = Convert.ToString(row["government_name"]);
                     string col = Convert.ToString(row["faction_color"]);
 
-                    if (string.IsNullOrWhiteSpace(id))
-                        throw new Exception("government_id cannot be blank.");
-                    if (string.IsNullOrWhiteSpace(name))
-                        throw new Exception("government_name cannot be blank.");
+                    if (string.IsNullOrWhiteSpace(id)) throw new Exception("government_id cannot be blank.");
+                    if (string.IsNullOrWhiteSpace(name)) throw new Exception("government_name cannot be blank.");
 
                     row["government_id"] = id.Trim();
                     row["government_name"] = name.Trim();
@@ -264,24 +266,103 @@ namespace StarMap2010
                     if (!string.IsNullOrWhiteSpace(col))
                     {
                         string norm = NormalizeHex(col);
-                        if (norm != null)
-                            row["faction_color"] = norm;
-                        else
-                            throw new Exception("faction_color must be a hex color like #RRGGBB.");
+                        if (norm != null) row["faction_color"] = norm;
+                        else throw new Exception("faction_color must be a hex color like #RRGGBB.");
+                    }
+
+                    if (row.RowState == DataRowState.Modified)
+                    {
+                        string oldId = Convert.ToString(row["government_id", DataRowVersion.Original]);
+                        string newId = Convert.ToString(row["government_id", DataRowVersion.Current]);
+
+                        oldId = (oldId ?? "").Trim();
+                        newId = (newId ?? "").Trim();
+
+                        if (oldId.Length > 0 && newId.Length > 0 &&
+                            !string.Equals(oldId, newId, StringComparison.OrdinalIgnoreCase))
+                        {
+                            renames.Add(Tuple.Create(oldId, newId));
+                        }
                     }
                 }
 
-                da.Update(dt);
-                dt.AcceptChanges();
+                // IMPORTANT:
+                // Renaming a PK + updating child FKs can trip FK constraints unless you have ON UPDATE CASCADE.
+                // We’ll temporarily disable FK checks for the save, then re-enable and verify.
+                using (var pragma = conn.CreateCommand())
+                {
+                    pragma.CommandText = "PRAGMA foreign_keys=OFF;";
+                    pragma.ExecuteNonQuery();
+                }
 
+                using (var tx = conn.BeginTransaction())
+                {
+                    // 1) Apply governments table changes (adapter)
+                    da.UpdateCommand = new SQLiteCommandBuilder(da).GetUpdateCommand();
+                    da.InsertCommand = new SQLiteCommandBuilder(da).GetInsertCommand();
+                    da.DeleteCommand = new SQLiteCommandBuilder(da).GetDeleteCommand();
+
+                    da.Update(dt);
+
+                    // 2) Cascade renames into star_systems
+                    for (int i = 0; i < renames.Count; i++)
+                    {
+                        string oldId = renames[i].Item1;
+                        string newId = renames[i].Item2;
+
+                        using (var cmd = conn.CreateCommand())
+                        {
+                            cmd.Transaction = tx;
+                            cmd.CommandText =
+                                "UPDATE star_systems SET government_id = @newId WHERE government_id = @oldId;";
+                            cmd.Parameters.AddWithValue("@newId", newId);
+                            cmd.Parameters.AddWithValue("@oldId", oldId);
+                            cmd.ExecuteNonQuery();
+                        }
+                    }
+
+                    tx.Commit();
+                }
+
+                using (var pragma = conn.CreateCommand())
+                {
+                    pragma.CommandText = "PRAGMA foreign_keys=ON;";
+                    pragma.ExecuteNonQuery();
+
+                    // Optional sanity check:
+                    pragma.CommandText = "PRAGMA foreign_key_check;";
+                    using (var r = pragma.ExecuteReader())
+                    {
+                        if (r.Read())
+                        {
+                            MessageBox.Show(this,
+                                "Saved, but foreign_key_check reported issues.\n" +
+                                "You may have broken references in the database.",
+                                "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        }
+                    }
+                }
+
+                dt.AcceptChanges();
                 this.DialogResult = DialogResult.OK;
                 this.Close();
             }
             catch (Exception ex)
             {
+                try
+                {
+                    using (var pragma = conn.CreateCommand())
+                    {
+                        pragma.CommandText = "PRAGMA foreign_keys=ON;";
+                        pragma.ExecuteNonQuery();
+                    }
+                }
+                catch { }
+
                 MessageBox.Show(this, ex.Message, "Save failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
+
 
         private void GovernmentEditorForm_FormClosing(object sender, FormClosingEventArgs e)
         {

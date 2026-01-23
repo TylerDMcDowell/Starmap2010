@@ -33,6 +33,15 @@ namespace StarMap2010
         public delegate void SystemSelectedHandler(StarSystemInfo s);
         public event SystemSelectedHandler SystemSelected;
 
+        // Measure mode
+        public bool MeasureMode { get; set; }
+
+        private StarSystemInfo _measureA;
+        private StarSystemInfo _measureB;
+
+        public event Action<StarSystemInfo, StarSystemInfo, float> MeasureCompleted;
+
+
         // ---- Gates overlay ----
         private List<JumpGateRenderableLink> _gateLinks = new List<JumpGateRenderableLink>();
         public bool ShowGates { get; set; }
@@ -643,6 +652,24 @@ namespace StarMap2010
             float sx = centerX + (worldPt.X - centerX) * z;
             float sy = centerY + (worldPt.Y - centerY) * z;
             return new PointF(sx, sy);
+        }
+        public void ClearMeasure()
+        {
+            _measureA = null;
+            _measureB = null;
+            Invalidate();
+        }
+
+        private static float DistanceLy(StarSystemInfo a, StarSystemInfo b)
+        {
+            if (a == null || b == null) return 0f;
+
+            // Adjust these field names to match your model:
+            // commonly something like a.XLy / a.YLy, or a.X / a.Y (in LY space)
+            float dx = (float)(a.XReal - b.XReal);
+            float dy = (float)(a.YReal - b.YReal);
+            float dz = (float)(a.ZReal - b.ZReal);
+            return (float)Math.Sqrt((dx * dx + dy * dy) + dz * dz);
         }
     }
 }

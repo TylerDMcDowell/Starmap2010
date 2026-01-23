@@ -1645,6 +1645,7 @@ namespace StarMap2010.Ui
                 return null;
             }
 
+            // Left click: preview (always)
             pb.Click += (s, e) =>
             {
                 try
@@ -1654,14 +1655,127 @@ namespace StarMap2010.Ui
                 }
                 catch
                 {
-                    MessageBox.Show(this, "Unable to preview image:\n" + fullPath, "Wiki", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    MessageBox.Show(this, "Unable to preview image:\n" + fullPath, "Wiki",
+                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }
             };
+
+            // Context menu (only useful in edit mode)
+            var menu = new ContextMenuStrip();
+
+            var miEditCaption = new ToolStripMenuItem("Edit caption…");
+            miEditCaption.Click += (s, e) =>
+            {
+                if (!_editMode) { MessageBox.Show(this, "Click Edit first.", "Wiki"); return; }
+                string newCap = PromptText(this, "Caption:", "Edit Caption", img.Caption ?? "");
+                if (newCap == null) return;
+
+                try
+                {
+                    UpdateWikiImageCaption(img.ImageId, newCap);
+                    LoadImagesForPage(_currentPageId);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(this, "Failed to update caption:\n" + ex.Message, "Wiki",
+                        MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            };
+
+            var miInsertLink = new ToolStripMenuItem("Insert image link into body");
+            miInsertLink.Click += (s, e) =>
+            {
+                if (!_editMode) { MessageBox.Show(this, "Click Edit first.", "Wiki"); return; }
+                // Inserts a simple markdown-ish reference line the user can keep/edit.
+                // (Your renderer doesn’t “inline” images in body; strip is the display.)
+                InsertTextAtCaret("![" + (img.Caption ?? "") + "](" + (img.ImagePath ?? "") + ")");
+            };
+
+            var miUp = new ToolStripMenuItem("Move up");
+            miUp.Click += (s, e) =>
+            {
+                if (!_editMode) { MessageBox.Show(this, "Click Edit first.", "Wiki"); return; }
+                try
+                {
+                    MoveWikiImage(img.ImageId, -1);
+                    LoadImagesForPage(_currentPageId);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(this, "Move up failed:\n" + ex.Message, "Wiki",
+                        MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            };
+
+            var miDown = new ToolStripMenuItem("Move down");
+            miDown.Click += (s, e) =>
+            {
+                if (!_editMode) { MessageBox.Show(this, "Click Edit first.", "Wiki"); return; }
+                try
+                {
+                    MoveWikiImage(img.ImageId, +1);
+                    LoadImagesForPage(_currentPageId);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(this, "Move down failed:\n" + ex.Message, "Wiki",
+                        MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            };
+
+            var miDelete = new ToolStripMenuItem("Delete image");
+            miDelete.Click += (s, e) =>
+            {
+                if (!_editMode) { MessageBox.Show(this, "Click Edit first.", "Wiki"); return; }
+
+                var res = MessageBox.Show(this,
+                    "Delete this image entry from the wiki?\n\n(This removes the row from wiki_images. The file on disk is left alone.)",
+                    "Wiki",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Warning);
+
+                if (res != DialogResult.Yes) return;
+
+                try
+                {
+                    DeleteWikiImageRow(img.ImageId);
+                    LoadImagesForPage(_currentPageId);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(this, "Delete failed:\n" + ex.Message, "Wiki",
+                        MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            };
+
+            menu.Items.Add(miEditCaption);
+            menu.Items.Add(miInsertLink);
+            menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add(miUp);
+            menu.Items.Add(miDown);
+            menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add(miDelete);
+
+            // Enable/disable items based on edit mode when opening
+            menu.Opening += (s, e) =>
+            {
+                bool en = _editMode && !_draftNewPage && !string.IsNullOrEmpty(_currentPageId);
+                miEditCaption.Enabled = en;
+                miInsertLink.Enabled = en;
+                miUp.Enabled = en;
+                miDown.Enabled = en;
+                miDelete.Enabled = en;
+            };
+
+            pb.ContextMenuStrip = menu;
+            lbl.ContextMenuStrip = menu;
+            card.ContextMenuStrip = menu;
 
             card.Controls.Add(lbl);
             card.Controls.Add(pb);
             return card;
         }
+
 
         private string ResolveAssetPath(string relPath)
         {
@@ -2163,7 +2277,142 @@ namespace StarMap2010.Ui
             }
         }
 
+        private void InsertTextAtCaret(string text)
+        {
+            if (!_editMode) return;
+            if (text == null) text = "";
 
+            var rtb = _rtbBody;
+            int start = rtb.SelectionStart;
+            rtb.SelectedText = text;
+            rtb.SelectionStart = start + text.Length;
+            rtb.SelectionLength = 0;
+            rtb.Focus();
+            MarkDirty();
+        }
 
+        private void UpdateWikiImageCaption(string imageId, string caption)
+        {
+            using (var conn = new System.Data.SQLite.SQLiteConnection("Data Source=" + _dbPath + ";Version=3;"))
+            {
+                conn.Open();
+                using (var cmd = new System.Data.SQLite.SQLiteCommand(
+                    "UPDATE wiki_images SET caption=@cap WHERE image_id=@iid;", conn))
+                {
+                    cmd.Parameters.AddWithValue("@cap", caption ?? "");
+                    cmd.Parameters.AddWithValue("@iid", imageId);
+                    cmd.ExecuteNonQuery();
+                }
+            }
+        }
+
+        private void DeleteWikiImageRow(string imageId)
+        {
+            using (var conn = new System.Data.SQLite.SQLiteConnection("Data Source=" + _dbPath + ";Version=3;"))
+            {
+                conn.Open();
+                using (var cmd = new System.Data.SQLite.SQLiteCommand(
+                    "DELETE FROM wiki_images WHERE image_id=@iid;", conn))
+                {
+                    cmd.Parameters.AddWithValue("@iid", imageId);
+                    cmd.ExecuteNonQuery();
+                }
+            }
+        }
+
+        // Moves image up/down in sort_order by swapping with neighbor
+        private void MoveWikiImage(string imageId, int direction)
+        {
+            if (direction == 0) return;
+            if (string.IsNullOrEmpty(_currentPageId)) return;
+
+            // Load current ordering
+            var list = new List<WikiImageVO>();
+            try
+            {
+                list = _dao.GetImagesForPage(_currentPageId);
+            }
+            catch
+            {
+                // fallback to DB query if dao throws
+                list = GetImagesForPageFallback(_currentPageId);
+            }
+
+            int idx = -1;
+            for (int i = 0; i < list.Count; i++)
+            {
+                if (string.Equals(list[i].ImageId, imageId, StringComparison.OrdinalIgnoreCase))
+                {
+                    idx = i;
+                    break;
+                }
+            }
+            if (idx < 0) return;
+
+            int swap = idx + (direction < 0 ? -1 : +1);
+            if (swap < 0 || swap >= list.Count) return;
+
+            var a = list[idx];
+            var b = list[swap];
+
+            // Swap their sort_order values
+            int aOrd = a.SortOrder;
+            int bOrd = b.SortOrder;
+
+            using (var conn = new System.Data.SQLite.SQLiteConnection("Data Source=" + _dbPath + ";Version=3;"))
+            {
+                conn.Open();
+                using (var tx = conn.BeginTransaction())
+                {
+                    using (var cmd = new System.Data.SQLite.SQLiteCommand(conn))
+                    {
+                        cmd.Transaction = tx;
+
+                        cmd.CommandText = "UPDATE wiki_images SET sort_order=@ord WHERE image_id=@iid;";
+                        cmd.Parameters.AddWithValue("@ord", bOrd);
+                        cmd.Parameters.AddWithValue("@iid", a.ImageId);
+                        cmd.ExecuteNonQuery();
+                        cmd.Parameters.Clear();
+
+                        cmd.CommandText = "UPDATE wiki_images SET sort_order=@ord WHERE image_id=@iid;";
+                        cmd.Parameters.AddWithValue("@ord", aOrd);
+                        cmd.Parameters.AddWithValue("@iid", b.ImageId);
+                        cmd.ExecuteNonQuery();
+                    }
+                    tx.Commit();
+                }
+            }
+        }
+
+        // Only used if dao isn’t ready/throws
+        private List<WikiImageVO> GetImagesForPageFallback(string pageId)
+        {
+            var list = new List<WikiImageVO>();
+            using (var conn = new System.Data.SQLite.SQLiteConnection("Data Source=" + _dbPath + ";Version=3;"))
+            {
+                conn.Open();
+                using (var cmd = new System.Data.SQLite.SQLiteCommand(
+                    "SELECT image_id, page_id, image_path, caption, sort_order FROM wiki_images WHERE page_id=@id ORDER BY sort_order, image_id;", conn))
+                {
+                    cmd.Parameters.AddWithValue("@id", pageId);
+                    using (var r = cmd.ExecuteReader())
+                    {
+                        while (r.Read())
+                        {
+                            var vo = new WikiImageVO();
+                            vo.ImageId = Convert.ToString(r["image_id"]);
+                            vo.PageId = Convert.ToString(r["page_id"]);
+                            vo.ImagePath = Convert.ToString(r["image_path"]);
+                            vo.Caption = Convert.ToString(r["caption"]);
+                            int so;
+                            if (!int.TryParse(Convert.ToString(r["sort_order"]), out so)) so = 0;
+                            vo.SortOrder = so;
+                            list.Add(vo);
+                        }
+                    }
+                }
+            }
+            return list;
+        }
     }
 }
