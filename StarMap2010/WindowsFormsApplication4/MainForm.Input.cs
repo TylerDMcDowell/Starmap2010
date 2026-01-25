@@ -9,7 +9,12 @@ namespace StarMap2010
     public partial class MainForm
     {
 
-        private void CenterViewportOn(int cx, int cy)
+                // Measure mode (distance between two star systems)
+        private bool _measureMode;
+        private StarSystemInfo _measureA;
+        private string _measureAId;
+
+private void CenterViewportOn(int cx, int cy)
         {
             int targetX = Math.Max(0, cx - viewport.ClientSize.Width / 2);
             int targetY = Math.Max(0, cy - viewport.ClientSize.Height / 2);
@@ -174,6 +179,14 @@ namespace StarMap2010
 
             bool shift = (Control.ModifierKeys & Keys.Shift) == Keys.Shift;
 
+            // Measure mode uses click-click WITHOUT interfering with the Shift swap feature
+            if (_measureMode)
+            {
+                HandleMeasureClick(hit);
+                return;
+            }
+
+
             if (!shift)
             {
                 selectedA = hit;
@@ -287,6 +300,74 @@ namespace StarMap2010
             desiredScrollY = sy;
             desiredScrollInit = true;
         }
+
+
+        private void SetMeasureMode(bool enabled)
+        {
+            _measureMode = enabled;
+            _measureA = null;
+            _measureAId = null;
+
+            // Don't accidentally keep swap selections around in measure mode
+            selectedA = null; selectedB = null;
+            selectedIdA = null; selectedIdB = null;
+
+            if (_lblMeasure != null)
+                _lblMeasure.Text = enabled ? "Click a system…" : "";
+        }
+
+        private void HandleMeasureClick(StarSystemInfo hit)
+        {
+            if (hit == null) return;
+
+            // Keep the normal selection behavior so the details panel updates
+            SetSelectedSystem(hit);
+
+            if (_measureA == null || string.IsNullOrEmpty(_measureAId))
+            {
+                _measureA = hit;
+                _measureAId = hit.SystemId;
+
+                if (_lblMeasure != null)
+                    _lblMeasure.Text = "From: " + (hit.SystemName ?? "(unnamed)") + " — click another";
+                return;
+            }
+
+            // Same system clicked again: treat as re-anchoring
+            if (string.Equals(_measureAId, hit.SystemId, StringComparison.OrdinalIgnoreCase))
+            {
+                _measureA = hit;
+                _measureAId = hit.SystemId;
+
+                if (_lblMeasure != null)
+                    _lblMeasure.Text = "From: " + (hit.SystemName ?? "(unnamed)") + " — click another";
+                return;
+            }
+
+            double d = ComputeDistanceLy(_measureA, hit);
+
+            if (_lblMeasure != null)
+                _lblMeasure.Text = string.Format("{0} → {1}: {2:0.00} ly",
+                    (_measureA.SystemName ?? "(unnamed)"),
+                    (hit.SystemName ?? "(unnamed)"),
+                    d);
+
+            // Chain measurements: keep the second click as the next anchor
+            _measureA = hit;
+            _measureAId = hit.SystemId;
+        }
+
+        private static double ComputeDistanceLy(StarSystemInfo a, StarSystemInfo b)
+        {
+            if (a == null || b == null) return 0;
+
+            double dx = a.XReal - b.XReal;
+            double dy = a.YReal - b.YReal;
+            double dz = a.ZReal - b.ZReal;
+
+            return Math.Sqrt(dx * dx + dy * dy + dz * dz);
+        }
+
 
     }
 }
