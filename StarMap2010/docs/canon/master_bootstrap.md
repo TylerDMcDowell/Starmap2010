@@ -33,6 +33,18 @@ Domain bootstraps are loaded only when relevant to the session topic.
 
 ---
 
+## 2.1 Domain Bootstrap Registry
+
+This section lists all active domain-specific bootstraps and their repository locations. These documents contain persistent project knowledge and are loaded when their subject domain becomes relevant in a session.
+
+| Domain | Bootstrap Name | Repository Path | When To Load |
+|--------|----------------|-----------------|--------------|
+| 3D Printing Workshop | Workshop Bootstrap — 3D Printing & Hardware Tuning | StarMap2010/docs/process/workshop_bootstrap.md | Any session involving 3D printers, hardware tuning, slicer settings, or print diagnostics |
+| Astraeum Project | Astraeum Canon Bootstrap | StarMap2010/docs/canon/session_bootstrap.md | Any session involving Astraeum lore, canon, SQL generation, or worldbuilding |
+| Paper Writing Project | Paper Project Bootstrap | (To be defined) | Any session involving structured paper development, research doctrine, or academic writing workflow |
+
+---
+
 ## 3. Transient vs Persistent Sessions
 
 Not all sessions are intended to produce long-term knowledge.
