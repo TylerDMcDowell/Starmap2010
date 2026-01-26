@@ -177,12 +177,8 @@ private void StyleButton(Button b)
             _summaryHost.Controls.Add(lblSysName);
             _summaryHost.Controls.Add(lblGov);
             _summaryHost.Controls.Add(lblCoords);
-            _chkMeasure = new CheckBox();
-            _chkMeasure.Text = "Measure";
-            _chkMeasure.AutoSize = true;
-            _chkMeasure.CheckedChanged += (s, e) => SetMeasureMode(_chkMeasure.Checked);
-            _summaryHost.Controls.Add(_chkMeasure);
-
+            // Measure mode toggle removed from UI.
+            // Use right-click on a star system: "Measure from here".
             _lblMeasure = new Label();
             _lblMeasure.Text = "";
             _lblMeasure.AutoEllipsis = true;

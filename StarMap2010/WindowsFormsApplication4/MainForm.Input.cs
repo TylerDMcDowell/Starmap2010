@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
 using StarMap2010.Models;
@@ -9,12 +10,20 @@ namespace StarMap2010
     public partial class MainForm
     {
 
-                // Measure mode (distance between two star systems)
+        // Measure mode (distance between two star systems)
         private bool _measureMode;
         private StarSystemInfo _measureA;
-        private string _measureAId;
+        private StarSystemInfo _ctxHitSystem;
 
-private void CenterViewportOn(int cx, int cy)
+        private string _measureAId;
+        private string _swapAId;
+        private string _routeAId;
+
+        private ContextMenuStrip _starCtx;
+        private string _ctxHitSystemId;
+
+
+        private void CenterViewportOn(int cx, int cy)
         {
             int targetX = Math.Max(0, cx - viewport.ClientSize.Width / 2);
             int targetY = Math.Max(0, cy - viewport.ClientSize.Height / 2);
@@ -157,6 +166,12 @@ private void CenterViewportOn(int cx, int cy)
 
         private void Canvas_MouseUp(object sender, MouseEventArgs e)
         {
+            if (e.Button == MouseButtons.Right)
+            {
+                ShowStarContextMenu(e.Location);
+                return;
+            }
+
             if (e.Button != MouseButtons.Left) return;
 
             if (isPanning)
@@ -176,6 +191,8 @@ private void CenterViewportOn(int cx, int cy)
 
             StarSystemInfo hit = canvas.HitTest(e.Location);
             if (hit == null) return;
+            SetSelectedSystem(hit);
+            canvas.SetSelected(hit);
 
             bool shift = (Control.ModifierKeys & Keys.Shift) == Keys.Shift;
 
@@ -193,8 +210,6 @@ private void CenterViewportOn(int cx, int cy)
                 selectedB = null;
                 selectedIdA = selectedA != null ? selectedA.SystemId : null;
                 selectedIdB = null;
-
-                SetSelectedSystem(selectedA);
                 canvas.SetSelected(selectedA);
                 return;
             }
@@ -206,8 +221,6 @@ private void CenterViewportOn(int cx, int cy)
 
                 selectedIdA = selectedA.SystemId;
                 selectedIdB = null;
-
-                SetSelectedSystem(selectedA);
                 canvas.SetSelected(selectedA);
                 return;
             }
@@ -217,10 +230,7 @@ private void CenterViewportOn(int cx, int cy)
 
             selectedB = hit;
             selectedIdB = selectedB.SystemId;
-
-            SetSelectedSystem(selectedB);
             canvas.SetSelected(selectedB);
-
             using (var dlg = new CompareSwapForm(_dbPath, selectedIdA, selectedIdB))
             {
                 var result = dlg.ShowDialog(this);
@@ -233,9 +243,7 @@ private void CenterViewportOn(int cx, int cy)
                 {
                     selectedB = null;
                     selectedIdB = null;
-
                     selectedA = FindSystemById(selectedIdA);
-                    SetSelectedSystem(selectedA);
                     canvas.SetSelected(selectedA);
                 }
             }
@@ -321,7 +329,7 @@ private void CenterViewportOn(int cx, int cy)
             if (hit == null) return;
 
             // Keep the normal selection behavior so the details panel updates
-            SetSelectedSystem(hit);
+            canvas.SetSelected(hit);
 
             if (_measureA == null || string.IsNullOrEmpty(_measureAId))
             {
@@ -369,5 +377,116 @@ private void CenterViewportOn(int cx, int cy)
         }
 
 
+        private void EnsureStarContextMenu()
+        {
+            if (_starCtx != null) return;
+
+            _starCtx = new ContextMenuStrip();
+
+            var miMeasure = new ToolStripMenuItem("Measure from here", null, (s, e) => BeginMeasureFromContext());
+            var miSwap = new ToolStripMenuItem("Swap from here", null, (s, e) => BeginSwapFromContext());
+            var miRoute = new ToolStripMenuItem("Route from here", null, (s, e) => BeginRouteFromContext());
+
+            var miCancel = new ToolStripMenuItem("Cancel mode", null, (s, e) => CancelContextModes());
+
+            _starCtx.Items.Add(miMeasure);
+            _starCtx.Items.Add(miSwap);
+            _starCtx.Items.Add(miRoute);
+            _starCtx.Items.Add(new ToolStripSeparator());
+            _starCtx.Items.Add(miCancel);
+
+            // Enable/disable based on state when opening
+            _starCtx.Opening += (s, e) =>
+            {
+                // Always require a hit
+                bool hasHit = (_ctxHitSystem != null);
+                foreach (ToolStripItem it in _starCtx.Items)
+                    it.Enabled = hasHit;
+
+                // Cancel is always allowed
+                miCancel.Enabled = true;
+            };
+        }
+
+        private void ShowStarContextMenu(Point clientPoint)
+        {
+            EnsureStarContextMenu();
+
+            var hit = canvas.HitTest(clientPoint);
+            if (hit == null)
+                return;
+
+            _ctxHitSystem = hit;
+
+            // Ensure selection follows the context click (feels natural)
+            try { canvas.SetSelected(hit); }
+            catch { }
+
+            _starCtx.Show(canvas, clientPoint);
+        }
+
+        private void BeginMeasureFromContext()
+        {
+            if (_ctxHitSystem == null) return;
+
+            _measureMode = true;
+            _measureA = _ctxHitSystem;
+            _measureAId = _ctxHitSystem.SystemId;
+
+            _swapAId = null;
+            _routeAId = null;
+
+            MessageBox.Show(
+                "Measure mode:\r\n\r\nLeft-click a second system to measure distance.\r\nRight-click any system to pick a new start or cancel.",
+                "Measure",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+
+        private void BeginSwapFromContext()
+        {
+            if (_ctxHitSystem == null) return;
+
+            _measureMode = false;
+            _measureA = null;
+            _measureAId = null;
+
+            _swapAId = _ctxHitSystem.SystemId;
+            _routeAId = null;
+
+            MessageBox.Show(
+                "Swap mode:\r\n\r\nLeft-click a second system to open the swap/compare dialog.\r\nRight-click any system to pick a new start or cancel.",
+                "Swap",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+
+        private void BeginRouteFromContext()
+        {
+            if (_ctxHitSystem == null) return;
+
+            _measureMode = false;
+            _measureA = null;
+            _measureAId = null;
+
+            _swapAId = null;
+            _routeAId = _ctxHitSystem.SystemId;
+
+            MessageBox.Show(
+                "Route mode:\r\n\r\nLeft-click a destination system to compute a route.\r\nRight-click any system to pick a new start or cancel.",
+                "Route",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+
+        private void CancelContextModes()
+        {
+            _measureMode = false;
+            _measureA = null;
+            _measureAId = null;
+            _swapAId = null;
+            _routeAId = null;
+        }
+
     }
-}
+    }

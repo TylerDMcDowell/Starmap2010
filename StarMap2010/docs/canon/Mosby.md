@@ -160,7 +160,7 @@ It was thin. Almost insultingly so.
 Fly to the Ael-Runn system.
 Wait.
 Then return.
-No contingencies. No timelines beyond soon. No explanation of what was being waitied for.
+No contingencies. No timelines beyond soon. No explanation of what was being waited for.
 The problem wasn’t the instructions.
 The problem was Ael-Runn.
 The system lay inside the Astraum Protectorate, and the Protectorate had never been subtle about who it tolerated in its space. Officially neutral, culturally rigid, and fiercely territorial, they were known for treating uninvited traffic as a philosophical failing rather than a navigational error.
@@ -247,7 +247,7 @@ Sael leaned closer, studying the geometry. “They’ll still have sensors.”
 She glanced up at him.
 “Assault shuttles were stealthy by design,” he continued. “The Iron Fall class especially. Low-emission hulls, baffled drives, sensor profiles meant to look like debris if you didn’t know what you were looking for.” He paused. “With the right pilot.”
 Sael’s eyes flicked briefly toward the open bay, to the painted hull and the shadows crawling across it as night set in.
-“The Farther Star is a Black Iron,” Mosby said. “Outfitted for insertion with even more advanced stealth with passive electronic warfare . Sit quiet. Wait. Leave without anyone ever being sure we were there. They were slated to be scrapped after the war.”
+“The Farther Star is a Black Iron,” Mosby said. “Outfitted for insertion with even more advanced stealth and  passive electronic warfare systems. Sit quiet. Wait. Leave without anyone ever being sure we were there. They were slated to be scrapped after the war.”
 Sael leaned back slightly.
 “Korrin knew this,” she said.
 It wasn’t a question.
@@ -266,7 +266,64 @@ She considered that, then nodded once. “All right.”
 She stood, glancing out toward the water where the waves struck the pier in a steady, patient rhythm. Gathering her things, she turned back to him.
 “It’s late,” she said. “And it looks like we’ll both be busy. I’ll head back to the government house. Leave word there when you’re ready.”
 Mosby watched her step away, then asked, “You going to be all right walking back alone?”
-She paused, just long enough to look over her shoulder.
-A brief, predatory smile touched her lips.
+She paused, just long enough to look over her shoulder and a brief, predatory smile touched her lips.
 “I don’t think there’s anything out here,” she said, “that I can’t handle.”
-Then she turned and walked off into the darkening evening, leaving Mosby alone with the charts, the ship, and the growing certainty that whatever waited for them wasn’t finished revealing its shape yet.
+Then she turned and walked off into the darkening evening, leaving Mosby alone with the charts, the ship, and the sound of the sea.
+
+The next two days started early. When the Relay office opened, messages were sent to traders Mosby knew and trusted. It would take at least a day before any replies came back. After that he arranged for cargo to be ready for loading in two days’ time, then returned to the Star, moving through her methodically, securing anything loose that might rattle free under hard thrust. The afternoon and the next day were spent checking and double-checking every system: power relays, cooling loops, hull seams along the forward flanks where Black Irons always took stress on violent entries. He worked with a light clamped between his teeth more often than not, collecting minor cuts on each hand and grease up to his elbows as he pulled open maintenance hatches that hadn’t been touched in months.
+Sael appeared at some point without announcement. He found her in the forward systems bay, sleeves rolled, diagnostic slate open, quietly recalibrating a sensor cluster that had been drifting off true for longer than he liked to admit.
+“You don’t have to do that,” he said, leaning against the hatch frame.
+“It was wrong,” she replied without looking up. “If I’m risking my life in this ship, I want it right.”
+He watched a moment longer, then nodded once and moved on.
+The next morning, when the haulers arrived with the cargo, she took charge of the loading without asking permission. Most of it was seafood packed in insulated crates and a small amount of local produce bound for markets farther along Mosby’s usual route. She moved with care, balancing weight across the bay without being told how, knowing instinctively not to stack anything where it might shift under lateral thrust. When she noticed Mosby watching, she said simply, “I worked logistics. Started as a loader and moved up from there before getting into government work.” Mosby shrugged, accepting the explanation, and let her continue.
+By noon most of the cargo had been secured. As the last hauler pulled away down the beach road, Manny came walking along the sand, trousers rolled, hat in hand, as if this were any other day. He carried a small envelope pouch tucked under his arm. Inside were printed relay texts — the replies to the messages Mosby had sent the morning before. Short, practical ones. A woman on Aureline who owed him a favor. A retired courier on Kallamar who still liked to feel useful. Each had agreed to cover the route Mosby normally ran until he returned.
+After reading them, Mosby handed the messages back to Manny. “Things’ll be fine till I get back,” he said. “Jacobson might overcharge a bit, but I can cover that later.”
+“Town good to know,” Manny said, eyes moving over the ship, taking in the change in her usual relaxed, open feel. Then he brought out what he’d been carrying in his other hand: a necklace of bright braided cord strung with small shells and a carved turtle of dark driftwood, worn smooth from handling. Without ceremony, Manny slipped it over Mosby’s head and let it settle against his chest.
+“What’s this for?” Mosby asked, lifting the turtle to examine it.
+Manny shrugged. “For the journey. Turtle knows. Comes back to the same shore.” He nodded once toward the ship. “Figure you should too.”
+He didn’t wait for thanks. He simply turned and started back toward town.
+“Hey,” Mosby called after him, “how do you know about turtles? Terraformers haven’t brought any in yet!”
+Manny raised a hand without looking back. “Don’t need to see them,” he called. “I know.”
+________________________________________
+Sael was tightening a strap when Mosby walked up the aft ramp.
+“We good to go?” he asked.
+“Last one.”
+“Got all your gear?”
+She pointed at a pile of bags and cases. “Everything I need.”
+“Fine. You have the copilot’s bunk. Stow your gear there. Any firearms go in the weapons locker.” Mosby said, pressing the controls to close the aft ramp and its clamshell doors.
+“Why is that?” she asked.
+“My ship, my rules.” He gave her a level look. “I don’t want anything loose that could be trouble once we’re underway. You don’t like it, we can call this off right now.”
+Sael paused, clearly not pleased, then relented. “Fine. But I want the access code.”
+“I figured as much,” Mosby said, walking past her toward the forward ramp.
+________________________________________
+Twenty minutes later Mosby was in the cockpit, running through preflight, when Sael entered and took the copilot’s seat.
+“Are we ready?” she asked, fastening her harness.
+“Just about,” Mosby answered, working through the last items on the checklist. He keyed the transmitter.
+“Brightwater Port Control, trader vessel Farther Star, requesting flight plan activation.”
+A moment passed before an out-of-breath voice replied, “Farther Star, Brightwater Control, go ahead.”
+Mosby flipped switches and checked readouts. The ship began to hum, then the twin engines deepened into a low, gathering growl. It felt as if the Farther Star were bracing herself to leap off the pier.
+“Filed outbound to Aureline via direct burn. Two souls aboard, cargo secured. Request plan activation and departure clearance.”
+Sael raised an eyebrow. “Being a bit officious, aren’t you?”
+“They don’t get much traffic,” Mosby said. “Makes ’em feel important. Keeps me in practice too.”
+The voice returned. “Plan activated at 13:12 local. No other departures scheduled. You’re clear whenever ready, Mosby.”
+“Brightwater Traffic, Farther Star lifting in two minutes.”
+“Copy that. Surface corridor clear. Winds light out of the west. You mind if my cousin uses your pier while you’re gone?”
+Mosby laughed softly. “Sure. Tell him just don’t scuff anything.”
+“No promises,” the voice replied.
+Mosby increased power, and the Farther Star lifted fast and clean, rising off the pier in a column of shimmering heat. The water below flattened under the thrust wash as the ship clawed upward, climbing hard into the afternoon sky.
+Blue faded to indigo, then to a deepening violet. Within minutes the horizon curved, clouds thinning beneath them like torn gauze. The vibration changed pitch as the atmosphere fought back.
+Sael sat rigid in the copilot’s seat, fingers locked around the armrests as the hull shuddered through a pocket of rough air.
+“You all right?” Mosby asked without looking at her, eyes on his instruments.
+She nodded once, too quickly. “Not used to this much turbulence.”
+Mosby’s mouth twitched. “Lady, you ain’t seen nothing yet.”
+Her head snapped toward him, eyes wide.
+His grin widened just a little.
+“Brightwater Traffic, Farther Star passing six-zero thousand meters, transitioning to orbital climb,” Mosby transmitted.
+A moment later the reply crackled through. “Logged, Farther Star. Safe flight, Mosby. Relay office will forward any messages.”
+
+
+
+
+
+
+
