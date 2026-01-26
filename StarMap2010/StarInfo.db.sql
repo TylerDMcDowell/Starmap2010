@@ -49,6 +49,79 @@ CREATE TABLE IF NOT EXISTS "body_species_habitability" (
 	FOREIGN KEY("object_id") REFERENCES "system_objects"("object_id") ON DELETE CASCADE,
 	FOREIGN KEY("species_id") REFERENCES "species"("species_id") ON DELETE CASCADE
 );
+CREATE TABLE IF NOT EXISTS "corridor_incidents" (
+	"incident_id"	TEXT,
+	"title"	TEXT NOT NULL,
+	"occurred_utc"	TEXT,
+	"location_type"	TEXT,
+	"location_id"	TEXT,
+	"attributed_to"	TEXT,
+	"narrative"	TEXT NOT NULL,
+	"page_id"	TEXT,
+	"updated_utc"	TEXT NOT NULL DEFAULT (datetime('now')),
+	PRIMARY KEY("incident_id"),
+	FOREIGN KEY("page_id") REFERENCES "wiki_pages"("page_id")
+);
+CREATE TABLE IF NOT EXISTS "doctrine_attachments" (
+	"attachment_id"	TEXT,
+	"entity_type"	TEXT NOT NULL,
+	"entity_id"	TEXT NOT NULL,
+	"tradition_id"	TEXT NOT NULL,
+	"profile_id"	TEXT,
+	"precedence"	INTEGER NOT NULL DEFAULT 0,
+	"notes"	TEXT,
+	"updated_utc"	TEXT NOT NULL DEFAULT (datetime('now')),
+	PRIMARY KEY("attachment_id"),
+	FOREIGN KEY("profile_id") REFERENCES "doctrine_observance_profiles"("profile_id"),
+	FOREIGN KEY("tradition_id") REFERENCES "doctrine_traditions"("tradition_id")
+);
+CREATE TABLE IF NOT EXISTS "doctrine_observance_profiles" (
+	"profile_id"	TEXT,
+	"tradition_id"	TEXT NOT NULL,
+	"name"	TEXT NOT NULL,
+	"schedule_padding_pct"	REAL NOT NULL DEFAULT 0.0,
+	"inspection_weight"	REAL NOT NULL DEFAULT 1.0,
+	"abort_strictness"	REAL NOT NULL DEFAULT 1.0,
+	"notes"	TEXT,
+	"updated_utc"	TEXT NOT NULL DEFAULT (datetime('now')),
+	PRIMARY KEY("profile_id"),
+	FOREIGN KEY("tradition_id") REFERENCES "doctrine_traditions"("tradition_id")
+);
+CREATE TABLE IF NOT EXISTS "doctrine_practices" (
+	"practice_id"	TEXT,
+	"tradition_id"	TEXT NOT NULL,
+	"name"	TEXT NOT NULL,
+	"intent"	TEXT,
+	"description"	TEXT,
+	"severity"	INTEGER NOT NULL DEFAULT 1,
+	"page_id"	TEXT,
+	"sort_order"	INTEGER NOT NULL DEFAULT 0,
+	"updated_utc"	TEXT NOT NULL DEFAULT (datetime('now')),
+	PRIMARY KEY("practice_id"),
+	FOREIGN KEY("page_id") REFERENCES "wiki_pages"("page_id"),
+	FOREIGN KEY("tradition_id") REFERENCES "doctrine_traditions"("tradition_id")
+);
+CREATE TABLE IF NOT EXISTS "doctrine_steps" (
+	"step_id"	TEXT,
+	"practice_id"	TEXT NOT NULL,
+	"step_no"	INTEGER NOT NULL,
+	"step_text"	TEXT NOT NULL,
+	"updated_utc"	TEXT NOT NULL DEFAULT (datetime('now')),
+	PRIMARY KEY("step_id"),
+	FOREIGN KEY("practice_id") REFERENCES "doctrine_practices"("practice_id")
+);
+CREATE TABLE IF NOT EXISTS "doctrine_traditions" (
+	"tradition_id"	TEXT,
+	"name"	TEXT NOT NULL,
+	"summary"	TEXT,
+	"origin_type"	TEXT NOT NULL,
+	"home_polity_id"	TEXT,
+	"page_id"	TEXT,
+	"created_utc"	TEXT NOT NULL DEFAULT (datetime('now')),
+	"updated_utc"	TEXT NOT NULL DEFAULT (datetime('now')),
+	PRIMARY KEY("tradition_id"),
+	FOREIGN KEY("page_id") REFERENCES "wiki_pages"("page_id")
+);
 CREATE TABLE IF NOT EXISTS "env_profile_attributes" (
 	"profile_id"	TEXT NOT NULL,
 	"attr_key"	TEXT NOT NULL,
@@ -65,6 +138,19 @@ CREATE TABLE IF NOT EXISTS "governments" (
 	"government_name"	TEXT NOT NULL UNIQUE,
 	"faction_color"	TEXT,
 	PRIMARY KEY("government_id")
+);
+CREATE TABLE IF NOT EXISTS "incident_doctrines" (
+	"row_id"	TEXT,
+	"incident_id"	TEXT NOT NULL,
+	"tradition_id"	TEXT NOT NULL,
+	"practice_id"	TEXT,
+	"notes"	TEXT,
+	"sort_order"	INTEGER NOT NULL DEFAULT 0,
+	"updated_utc"	TEXT NOT NULL DEFAULT (datetime('now')),
+	PRIMARY KEY("row_id"),
+	FOREIGN KEY("incident_id") REFERENCES "corridor_incidents"("incident_id"),
+	FOREIGN KEY("practice_id") REFERENCES "doctrine_practices"("practice_id"),
+	FOREIGN KEY("tradition_id") REFERENCES "doctrine_traditions"("tradition_id")
 );
 CREATE TABLE IF NOT EXISTS "installation_details" (
 	"object_id"	TEXT,
@@ -134,6 +220,9 @@ CREATE TABLE IF NOT EXISTS "moon_details" (
 	"notes"	TEXT,
 	"created_utc"	TEXT NOT NULL DEFAULT (datetime('now')),
 	"updated_utc"	TEXT NOT NULL DEFAULT (datetime('now')),
+	"axial_tilt_deg"	REAL,
+	"semi_major_axis_au"	REAL,
+	"albedo"	REAL,
 	PRIMARY KEY("object_id"),
 	FOREIGN KEY("object_id") REFERENCES "system_objects"("object_id") ON DELETE CASCADE
 );
@@ -187,8 +276,20 @@ CREATE TABLE IF NOT EXISTS "planet_details" (
 	"notes"	TEXT,
 	"created_utc"	TEXT NOT NULL DEFAULT (datetime('now')),
 	"updated_utc"	TEXT NOT NULL DEFAULT (datetime('now')),
+	"tidally_locked"	INTEGER NOT NULL DEFAULT 0,
+	"semi_major_axis_km"	REAL,
 	PRIMARY KEY("object_id"),
 	FOREIGN KEY("object_id") REFERENCES "system_objects"("object_id") ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS "sim_constants" (
+	"key"	TEXT,
+	"value_real"	REAL NOT NULL,
+	"unit"	TEXT NOT NULL,
+	"description"	TEXT,
+	"page_id"	TEXT,
+	"updated_utc"	TEXT NOT NULL DEFAULT (datetime('now')),
+	PRIMARY KEY("key"),
+	FOREIGN KEY("page_id") REFERENCES "wiki_pages"("page_id")
 );
 CREATE TABLE IF NOT EXISTS "species" (
 	"species_id"	TEXT,
@@ -396,6 +497,78 @@ CREATE TABLE IF NOT EXISTS "terraform_targets" (
 	PRIMARY KEY("target_id"),
 	FOREIGN KEY("profile_id") REFERENCES "species_env_profiles"("profile_id") ON DELETE SET NULL,
 	FOREIGN KEY("species_id") REFERENCES "species"("species_id") ON DELETE SET NULL
+);
+CREATE TABLE IF NOT EXISTS "wiki_images" (
+	"image_id"	TEXT,
+	"page_id"	TEXT NOT NULL,
+	"image_path"	TEXT NOT NULL,
+	"caption"	TEXT,
+	"sort_order"	INTEGER NOT NULL DEFAULT 0,
+	PRIMARY KEY("image_id"),
+	FOREIGN KEY("page_id") REFERENCES "wiki_pages"("page_id")
+);
+CREATE TABLE IF NOT EXISTS "wiki_links" (
+	"link_id"	TEXT,
+	"page_id"	TEXT NOT NULL,
+	"entity_type"	TEXT NOT NULL,
+	"entity_id"	TEXT NOT NULL,
+	"sort_order"	INTEGER NOT NULL DEFAULT 0,
+	PRIMARY KEY("link_id"),
+	FOREIGN KEY("page_id") REFERENCES "wiki_pages"("page_id")
+);
+CREATE TABLE IF NOT EXISTS "wiki_pages" (
+	"page_id"	TEXT,
+	"slug"	TEXT NOT NULL UNIQUE,
+	"title"	TEXT NOT NULL,
+	"body_markdown"	TEXT NOT NULL,
+	"tags"	TEXT,
+	"created_utc"	TEXT NOT NULL DEFAULT (datetime('now')),
+	"updated_utc"	TEXT NOT NULL DEFAULT (datetime('now')),
+	"sort_order"	INTEGER NOT NULL DEFAULT 0,
+	PRIMARY KEY("page_id")
+);
+CREATE INDEX IF NOT EXISTS "idx_attachments_entity" ON "doctrine_attachments" (
+	"entity_type",
+	"entity_id"
+);
+CREATE INDEX IF NOT EXISTS "idx_attachments_tradition" ON "doctrine_attachments" (
+	"tradition_id"
+);
+CREATE INDEX IF NOT EXISTS "idx_doctrine_practices_tradition" ON "doctrine_practices" (
+	"tradition_id"
+);
+CREATE INDEX IF NOT EXISTS "idx_doctrine_steps_practice" ON "doctrine_steps" (
+	"practice_id"
+);
+CREATE INDEX IF NOT EXISTS "idx_incident_doctrines_incident" ON "incident_doctrines" (
+	"incident_id"
+);
+CREATE INDEX IF NOT EXISTS "idx_incidents_location" ON "corridor_incidents" (
+	"location_type",
+	"location_id"
+);
+CREATE INDEX IF NOT EXISTS "idx_profiles_tradition" ON "doctrine_observance_profiles" (
+	"tradition_id"
+);
+CREATE INDEX IF NOT EXISTS "idx_sim_constants_page" ON "sim_constants" (
+	"page_id"
+);
+CREATE INDEX IF NOT EXISTS "idx_wiki_images_page" ON "wiki_images" (
+	"page_id"
+);
+CREATE INDEX IF NOT EXISTS "idx_wiki_links_entity" ON "wiki_links" (
+	"entity_type",
+	"entity_id"
+);
+CREATE INDEX IF NOT EXISTS "idx_wiki_links_page" ON "wiki_links" (
+	"page_id"
+);
+CREATE INDEX IF NOT EXISTS "idx_wiki_pages_slug" ON "wiki_pages" (
+	"slug"
+);
+CREATE INDEX IF NOT EXISTS "idx_wiki_pages_sort" ON "wiki_pages" (
+	"sort_order",
+	"title"
 );
 CREATE INDEX IF NOT EXISTS "ix_attr_dict_alias" ON "attribute_dictionary_aliases" (
 	"alias"
