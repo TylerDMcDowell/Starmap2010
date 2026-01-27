@@ -146,7 +146,7 @@ private void StyleButton(Button b)
             _summaryHost = new Panel
             {
                 Dock = DockStyle.Top,
-                Height = 110,
+                Height = 140,
                 BackColor = content.BackColor
             };
 
@@ -177,30 +177,36 @@ private void StyleButton(Button b)
             _summaryHost.Controls.Add(lblSysName);
             _summaryHost.Controls.Add(lblGov);
             _summaryHost.Controls.Add(lblCoords);
-            // Measure mode toggle removed from UI.
-            // Use right-click on a star system: "Measure from here".
+            _chkMeasure = new CheckBox();
+            _chkMeasure.Text = "Measure";
+            _chkMeasure.AutoSize = true;
+            _chkMeasure.CheckedChanged += (s, e) => SetMeasureMode(_chkMeasure.Checked);
+            _summaryHost.Controls.Add(_chkMeasure);
+
             _lblMeasure = new Label();
             _lblMeasure.Text = "";
+            _lblMeasure.AutoSize = false;
             _lblMeasure.AutoEllipsis = true;
-            _lblMeasure.TextAlign = ContentAlignment.MiddleLeft;
+            _lblMeasure.TextAlign = ContentAlignment.TopLeft;
+            _lblMeasure.BorderStyle = BorderStyle.FixedSingle;
+            _lblMeasure.BackColor = SystemColors.Window;
+            _lblMeasure.ForeColor = SystemColors.ControlText;
+            _lblMeasure.Padding = new Padding(4, 3, 4, 3);
             _summaryHost.Controls.Add(_lblMeasure);
-
-
             // Manual layout inside summary (use _summaryHost width, not infoPanel)
             int sw = _summaryHost.ClientSize.Width;
             lblSysName.SetBounds(0, 0, sw, 24);
             lblGov.SetBounds(0, 26, sw, 18);
             lblCoords.SetBounds(0, 46, sw, 18);
             if (_chkMeasure != null) _chkMeasure.SetBounds(0, 66, 90, 18);
-            if (_lblMeasure != null) _lblMeasure.SetBounds(96, 66, sw - 96, 18);
-
+            if (_lblMeasure != null) _lblMeasure.SetBounds(0, 66, sw, 44);
             _summaryHost.Resize += (s, e) =>
             {
                 int w = _summaryHost.ClientSize.Width;
                 lblSysName.Width = w;
                 lblGov.Width = w;
                 lblCoords.Width = w;
-            if (_lblMeasure != null) _lblMeasure.Width = Math.Max(0, w - 96);
+            if (_lblMeasure != null) _lblMeasure.Width = w;
             };
 
             // =========================================================

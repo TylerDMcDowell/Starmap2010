@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
 using StarMap2010.Models;
@@ -10,20 +9,23 @@ namespace StarMap2010
     public partial class MainForm
     {
 
-        // Measure mode (distance between two star systems)
-        private bool _measureMode;
-        private StarSystemInfo _measureA;
-        private StarSystemInfo _ctxHitSystem;
+                
+        // ============================================================
+        // Star context actions (Measure / Swap / Route)
+        // ============================================================
 
-        private string _measureAId;
         private string _swapAId;
         private string _routeAId;
 
         private ContextMenuStrip _starCtx;
-        private string _ctxHitSystemId;
+        private StarSystemInfo _ctxHitSystem;
 
+// Measure mode (distance between two star systems)
+        private bool _measureMode;
+        private StarSystemInfo _measureA;
+        private string _measureAId;
 
-        private void CenterViewportOn(int cx, int cy)
+private void CenterViewportOn(int cx, int cy)
         {
             int targetX = Math.Max(0, cx - viewport.ClientSize.Width / 2);
             int targetY = Math.Max(0, cy - viewport.ClientSize.Height / 2);
@@ -191,27 +193,34 @@ namespace StarMap2010
 
             StarSystemInfo hit = canvas.HitTest(e.Location);
             if (hit == null) return;
-            SetSelectedSystem(hit);
-            canvas.SetSelected(hit);
 
-            bool shift = (Control.ModifierKeys & Keys.Shift) == Keys.Shift;
 
-            // Measure mode uses click-click WITHOUT interfering with the Shift swap feature
+            // Context modes (right-click -> choose action, then left-click a target)
             if (_measureMode)
             {
                 HandleMeasureClick(hit);
                 return;
             }
+            if (!string.IsNullOrEmpty(_swapAId))
+            {
+                HandleSwapClick(hit);
+                return;
+            }
+            if (!string.IsNullOrEmpty(_routeAId))
+            {
+                HandleRouteClick(hit);
+                return;
+            }
 
-
+            bool shift = (Control.ModifierKeys & Keys.Shift) == Keys.Shift;
             if (!shift)
             {
                 selectedA = hit;
                 selectedB = null;
                 selectedIdA = selectedA != null ? selectedA.SystemId : null;
                 selectedIdB = null;
-                canvas.SetSelected(selectedA);
-                return;
+            canvas.SetSelected(selectedA);
+            return;
             }
 
             if (string.IsNullOrEmpty(selectedIdA))
@@ -221,8 +230,8 @@ namespace StarMap2010
 
                 selectedIdA = selectedA.SystemId;
                 selectedIdB = null;
-                canvas.SetSelected(selectedA);
-                return;
+            canvas.SetSelected(selectedA);
+            return;
             }
 
             if (!string.IsNullOrEmpty(selectedIdA) && hit.SystemId == selectedIdA)
@@ -231,6 +240,7 @@ namespace StarMap2010
             selectedB = hit;
             selectedIdB = selectedB.SystemId;
             canvas.SetSelected(selectedB);
+            SetSelectedSystem(selectedB);
             using (var dlg = new CompareSwapForm(_dbPath, selectedIdA, selectedIdB))
             {
                 var result = dlg.ShowDialog(this);
@@ -243,9 +253,10 @@ namespace StarMap2010
                 {
                     selectedB = null;
                     selectedIdB = null;
+
                     selectedA = FindSystemById(selectedIdA);
-                    canvas.SetSelected(selectedA);
-                }
+            canvas.SetSelected(selectedA);
+            }
             }
         }
 
@@ -324,50 +335,22 @@ namespace StarMap2010
                 _lblMeasure.Text = enabled ? "Click a system…" : "";
         }
 
-        private void HandleMeasureClick(StarSystemInfo hit)
+
+
+        private void SetStatus(string text)
         {
-            if (hit == null) return;
+            if (_lblMeasure == null) return;
+            _lblMeasure.Text = text ?? "";
+        }
 
-            // Keep the normal selection behavior so the details panel updates
-            canvas.SetSelected(hit);
-
-            if (_measureA == null || string.IsNullOrEmpty(_measureAId))
-            {
-                _measureA = hit;
-                _measureAId = hit.SystemId;
-
-                if (_lblMeasure != null)
-                    _lblMeasure.Text = "From: " + (hit.SystemName ?? "(unnamed)") + " — click another";
-                return;
-            }
-
-            // Same system clicked again: treat as re-anchoring
-            if (string.Equals(_measureAId, hit.SystemId, StringComparison.OrdinalIgnoreCase))
-            {
-                _measureA = hit;
-                _measureAId = hit.SystemId;
-
-                if (_lblMeasure != null)
-                    _lblMeasure.Text = "From: " + (hit.SystemName ?? "(unnamed)") + " — click another";
-                return;
-            }
-
-            double d = ComputeDistanceLy(_measureA, hit);
-
-            if (_lblMeasure != null)
-                _lblMeasure.Text = string.Format("{0} → {1}: {2:0.00} ly",
-                    (_measureA.SystemName ?? "(unnamed)"),
-                    (hit.SystemName ?? "(unnamed)"),
-                    d);
-
-            // Chain measurements: keep the second click as the next anchor
-            _measureA = hit;
-            _measureAId = hit.SystemId;
+        private void ClearStatus()
+        {
+            SetStatus("");
         }
 
         private static double ComputeDistanceLy(StarSystemInfo a, StarSystemInfo b)
         {
-            if (a == null || b == null) return 0;
+            if (a == null || b == null) return 0.0;
 
             double dx = a.XReal - b.XReal;
             double dy = a.YReal - b.YReal;
@@ -375,7 +358,6 @@ namespace StarMap2010
 
             return Math.Sqrt(dx * dx + dy * dy + dz * dz);
         }
-
 
         private void EnsureStarContextMenu()
         {
@@ -386,7 +368,6 @@ namespace StarMap2010
             var miMeasure = new ToolStripMenuItem("Measure from here", null, (s, e) => BeginMeasureFromContext());
             var miSwap = new ToolStripMenuItem("Swap from here", null, (s, e) => BeginSwapFromContext());
             var miRoute = new ToolStripMenuItem("Route from here", null, (s, e) => BeginRouteFromContext());
-
             var miCancel = new ToolStripMenuItem("Cancel mode", null, (s, e) => CancelContextModes());
 
             _starCtx.Items.Add(miMeasure);
@@ -395,15 +376,12 @@ namespace StarMap2010
             _starCtx.Items.Add(new ToolStripSeparator());
             _starCtx.Items.Add(miCancel);
 
-            // Enable/disable based on state when opening
             _starCtx.Opening += (s, e) =>
             {
-                // Always require a hit
                 bool hasHit = (_ctxHitSystem != null);
-                foreach (ToolStripItem it in _starCtx.Items)
-                    it.Enabled = hasHit;
-
-                // Cancel is always allowed
+                miMeasure.Enabled = hasHit;
+                miSwap.Enabled = hasHit;
+                miRoute.Enabled = hasHit;
                 miCancel.Enabled = true;
             };
         }
@@ -412,14 +390,19 @@ namespace StarMap2010
         {
             EnsureStarContextMenu();
 
-            var hit = canvas.HitTest(clientPoint);
-            if (hit == null)
-                return;
+            if (canvas == null) return;
+
+            StarSystemInfo hit = canvas.HitTest(clientPoint);
+            if (hit == null) return;
 
             _ctxHitSystem = hit;
 
-            // Ensure selection follows the context click (feels natural)
-            try { canvas.SetSelected(hit); }
+            // Ensure selection + details panel update on right-click
+            try
+            {
+                canvas.SetSelected(hit);
+                SetSelectedSystem(hit);
+            }
             catch { }
 
             _starCtx.Show(canvas, clientPoint);
@@ -436,11 +419,7 @@ namespace StarMap2010
             _swapAId = null;
             _routeAId = null;
 
-            MessageBox.Show(
-                "Measure mode:\r\n\r\nLeft-click a second system to measure distance.\r\nRight-click any system to pick a new start or cancel.",
-                "Measure",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+            SetStatus("Measure: From " + (_ctxHitSystem.SystemName ?? "(unnamed)") + "\r\nLeft-click another system…");
         }
 
         private void BeginSwapFromContext()
@@ -454,11 +433,7 @@ namespace StarMap2010
             _swapAId = _ctxHitSystem.SystemId;
             _routeAId = null;
 
-            MessageBox.Show(
-                "Swap mode:\r\n\r\nLeft-click a second system to open the swap/compare dialog.\r\nRight-click any system to pick a new start or cancel.",
-                "Swap",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+            SetStatus("Swap: Start " + (_ctxHitSystem.SystemName ?? "(unnamed)") + "\r\nLeft-click a second system…");
         }
 
         private void BeginRouteFromContext()
@@ -472,11 +447,7 @@ namespace StarMap2010
             _swapAId = null;
             _routeAId = _ctxHitSystem.SystemId;
 
-            MessageBox.Show(
-                "Route mode:\r\n\r\nLeft-click a destination system to compute a route.\r\nRight-click any system to pick a new start or cancel.",
-                "Route",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+            SetStatus("Route: Start " + (_ctxHitSystem.SystemName ?? "(unnamed)") + "\r\nLeft-click a destination…");
         }
 
         private void CancelContextModes()
@@ -486,7 +457,90 @@ namespace StarMap2010
             _measureAId = null;
             _swapAId = null;
             _routeAId = null;
+            ClearStatus();
+        }
+
+        private void HandleMeasureClick(StarSystemInfo hit)
+        {
+            if (hit == null) return;
+
+            canvas.SetSelected(hit);
+            SetSelectedSystem(hit);
+
+            if (_measureA == null || string.IsNullOrEmpty(_measureAId))
+            {
+                _measureA = hit;
+                _measureAId = hit.SystemId;
+                SetStatus("Measure: From " + (hit.SystemName ?? "(unnamed)") + "\r\nLeft-click another system…");
+                return;
+            }
+
+            if (string.Equals(_measureAId, hit.SystemId, StringComparison.OrdinalIgnoreCase))
+            {
+                _measureA = hit;
+                _measureAId = hit.SystemId;
+                SetStatus("Measure: From " + (hit.SystemName ?? "(unnamed)") + "\r\nLeft-click another system…");
+                return;
+            }
+
+            double d = ComputeDistanceLy(_measureA, hit);
+            SetStatus(string.Format("Measure:\r\n{0} → {1}: {2:0.00} ly",
+                (_measureA.SystemName ?? "(unnamed)"),
+                (hit.SystemName ?? "(unnamed)"),
+                d));
+
+            // Chain: keep this as the new start
+            _measureA = hit;
+            _measureAId = hit.SystemId;
+        }
+
+        private void HandleSwapClick(StarSystemInfo hit)
+        {
+            if (hit == null) return;
+            if (string.IsNullOrEmpty(_swapAId)) return;
+
+            if (string.Equals(_swapAId, hit.SystemId, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            // Ensure selection follows click
+            canvas.SetSelected(hit);
+            SetSelectedSystem(hit);
+
+            using (var dlg = new CompareSwapForm(_dbPath, _swapAId, hit.SystemId))
+            {
+                var result = dlg.ShowDialog(this);
+                if (result == DialogResult.OK)
+                {
+                    ReloadAndRefresh();
+                }
+            }
+
+            _swapAId = null;
+            ClearStatus();
+        }
+
+        private void HandleRouteClick(StarSystemInfo hit)
+        {
+            if (hit == null) return;
+            if (string.IsNullOrEmpty(_routeAId)) return;
+
+            var start = FindSystemById(_routeAId);
+            if (start == null)
+            {
+                SetStatus("Route: start system not found.");
+                _routeAId = null;
+                return;
+            }
+
+            // TEMP (until RoutePlanner is integrated): show direct distance.
+            double d = ComputeDistanceLy(start, hit);
+            SetStatus(string.Format("Route (direct):\r\n{0} → {1}: {2:0.00} ly",
+                (start.SystemName ?? "(unnamed)"),
+                (hit.SystemName ?? "(unnamed)"),
+                d));
+
+            _routeAId = null;
         }
 
     }
-    }
+}
