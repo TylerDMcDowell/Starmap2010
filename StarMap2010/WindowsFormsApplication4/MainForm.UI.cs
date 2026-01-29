@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // File: MainForm.UI.cs
 // Project: StarMap2010
 //
@@ -24,10 +24,8 @@ namespace StarMap2010
     {
         // Sidebar building blocks used by SidebarLayout.cs
         private Panel _summaryHost;
-
-        
-        private CheckBox _chkMeasure;
-        private Label _lblMeasure;
+        private RichTextBox _rtbStatus;
+        private Panel _detailsContentHost;
 private void StyleButton(Button b)
         {
             if (b == null) return;
@@ -177,37 +175,16 @@ private void StyleButton(Button b)
             _summaryHost.Controls.Add(lblSysName);
             _summaryHost.Controls.Add(lblGov);
             _summaryHost.Controls.Add(lblCoords);
-            _chkMeasure = new CheckBox();
-            _chkMeasure.Text = "Measure";
-            _chkMeasure.AutoSize = true;
-            _chkMeasure.CheckedChanged += (s, e) => SetMeasureMode(_chkMeasure.Checked);
-            _summaryHost.Controls.Add(_chkMeasure);
-
-            _lblMeasure = new Label();
-            _lblMeasure.Text = "";
-            _lblMeasure.AutoSize = false;
-            _lblMeasure.AutoEllipsis = true;
-            _lblMeasure.TextAlign = ContentAlignment.TopLeft;
-            _lblMeasure.BorderStyle = BorderStyle.FixedSingle;
-            _lblMeasure.BackColor = SystemColors.Window;
-            _lblMeasure.ForeColor = SystemColors.ControlText;
-            _lblMeasure.Padding = new Padding(4, 3, 4, 3);
-            _summaryHost.Controls.Add(_lblMeasure);
             // Manual layout inside summary (use _summaryHost width, not infoPanel)
             int sw = _summaryHost.ClientSize.Width;
             lblSysName.SetBounds(0, 0, sw, 24);
             lblGov.SetBounds(0, 26, sw, 18);
-            lblCoords.SetBounds(0, 46, sw, 18);
-            if (_chkMeasure != null) _chkMeasure.SetBounds(0, 66, 90, 18);
-            if (_lblMeasure != null) _lblMeasure.SetBounds(0, 66, sw, 44);
-            _summaryHost.Resize += (s, e) =>
+            lblCoords.SetBounds(0, 46, sw, 18);            _summaryHost.Resize += (s, e) =>
             {
                 int w = _summaryHost.ClientSize.Width;
                 lblSysName.Width = w;
                 lblGov.Width = w;
-                lblCoords.Width = w;
-            if (_lblMeasure != null) _lblMeasure.Width = w;
-            };
+                lblCoords.Width = w;            };
 
             // =========================================================
             // Gate Facility section (collapsible)
@@ -276,7 +253,43 @@ private void StyleButton(Button b)
             };
 
             splitContents.Panel1.Controls.Add(tvSystemObjects);
-            splitContents.Panel2.Controls.Add(pnlDetailsHost);
+            
+
+            // Details layout: content area + status log (for measure/route/etc.)
+            var detailsLayout = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 2,
+                Margin = new Padding(0),
+                Padding = new Padding(0)
+            };
+            detailsLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+            detailsLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 110f));
+
+            _detailsContentHost = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = pnlDetailsHost.BackColor,
+                Margin = new Padding(0),
+                Padding = new Padding(0)
+            };
+
+            _rtbStatus = new RichTextBox
+            {
+                Dock = DockStyle.Fill,
+                ReadOnly = true,
+                BorderStyle = BorderStyle.None,
+                BackColor = SystemColors.Window,
+                DetectUrls = false,
+                ScrollBars = RichTextBoxScrollBars.Vertical
+            };
+
+            detailsLayout.Controls.Add(_detailsContentHost, 0, 0);
+            detailsLayout.Controls.Add(_rtbStatus, 0, 1);
+            pnlDetailsHost.Controls.Add(detailsLayout);
+
+splitContents.Panel2.Controls.Add(pnlDetailsHost);
 
             _secContents.ContentPanel.Controls.Add(splitContents);
 

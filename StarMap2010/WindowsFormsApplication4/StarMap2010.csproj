@@ -89,6 +89,7 @@
     <Compile Include="CollapsibleSection.cs">
       <SubType>Component</SubType>
     </Compile>
+    <Compile Include="RoutePlanner.cs" />
     <Compile Include="SystemObjectEditorForm.cs">
       <SubType>Form</SubType>
     </Compile>

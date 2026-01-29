@@ -1,15 +1,16 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
 using StarMap2010.Models;
 
 namespace StarMap2010
 {
-    //MainForm.Input
+    // ============================================================
+    // File: MainForm.Input.cs
+    // ============================================================
     public partial class MainForm
     {
-
-                
         // ============================================================
         // Star context actions (Measure / Swap / Route)
         // ============================================================
@@ -20,12 +21,12 @@ namespace StarMap2010
         private ContextMenuStrip _starCtx;
         private StarSystemInfo _ctxHitSystem;
 
-// Measure mode (distance between two star systems)
+        // Measure mode (distance between two star systems)
         private bool _measureMode;
         private StarSystemInfo _measureA;
         private string _measureAId;
 
-private void CenterViewportOn(int cx, int cy)
+        private void CenterViewportOn(int cx, int cy)
         {
             int targetX = Math.Max(0, cx - viewport.ClientSize.Width / 2);
             int targetY = Math.Max(0, cy - viewport.ClientSize.Height / 2);
@@ -60,7 +61,6 @@ private void CenterViewportOn(int cx, int cy)
             }
 
             float oldZoom = zoomFactor;
-
             PointF worldUnderMouse = canvas.ScreenToWorld(mouseCanvasPt);
 
             if (e.Delta > 0) zoomFactor += ZOOM_STEP;
@@ -194,23 +194,10 @@ private void CenterViewportOn(int cx, int cy)
             StarSystemInfo hit = canvas.HitTest(e.Location);
             if (hit == null) return;
 
-
             // Context modes (right-click -> choose action, then left-click a target)
-            if (_measureMode)
-            {
-                HandleMeasureClick(hit);
-                return;
-            }
-            if (!string.IsNullOrEmpty(_swapAId))
-            {
-                HandleSwapClick(hit);
-                return;
-            }
-            if (!string.IsNullOrEmpty(_routeAId))
-            {
-                HandleRouteClick(hit);
-                return;
-            }
+            if (_measureMode) { HandleMeasureClick(hit); return; }
+            if (!string.IsNullOrEmpty(_swapAId)) { HandleSwapClick(hit); return; }
+            if (!string.IsNullOrEmpty(_routeAId)) { HandleRouteClick(hit); return; }
 
             bool shift = (Control.ModifierKeys & Keys.Shift) == Keys.Shift;
             if (!shift)
@@ -219,9 +206,12 @@ private void CenterViewportOn(int cx, int cy)
                 selectedB = null;
                 selectedIdA = selectedA != null ? selectedA.SystemId : null;
                 selectedIdB = null;
-            canvas.SetSelected(selectedA);
-            return;
+
+                canvas.SetSelected(selectedA);
+                SetSelectedSystem(hit);   // <-- load tree + sidebar
+                return;
             }
+
 
             if (string.IsNullOrEmpty(selectedIdA))
             {
@@ -230,8 +220,9 @@ private void CenterViewportOn(int cx, int cy)
 
                 selectedIdA = selectedA.SystemId;
                 selectedIdB = null;
-            canvas.SetSelected(selectedA);
-            return;
+
+                canvas.SetSelected(selectedA);
+                return;
             }
 
             if (!string.IsNullOrEmpty(selectedIdA) && hit.SystemId == selectedIdA)
@@ -239,8 +230,10 @@ private void CenterViewportOn(int cx, int cy)
 
             selectedB = hit;
             selectedIdB = selectedB.SystemId;
+
             canvas.SetSelected(selectedB);
             SetSelectedSystem(selectedB);
+
             using (var dlg = new CompareSwapForm(_dbPath, selectedIdA, selectedIdB))
             {
                 var result = dlg.ShowDialog(this);
@@ -255,8 +248,8 @@ private void CenterViewportOn(int cx, int cy)
                     selectedIdB = null;
 
                     selectedA = FindSystemById(selectedIdA);
-            canvas.SetSelected(selectedA);
-            }
+                    canvas.SetSelected(selectedA);
+                }
             }
         }
 
@@ -320,7 +313,6 @@ private void CenterViewportOn(int cx, int cy)
             desiredScrollInit = true;
         }
 
-
         private void SetMeasureMode(bool enabled)
         {
             _measureMode = enabled;
@@ -331,22 +323,25 @@ private void CenterViewportOn(int cx, int cy)
             selectedA = null; selectedB = null;
             selectedIdA = null; selectedIdB = null;
 
-            if (_lblMeasure != null)
-                _lblMeasure.Text = enabled ? "Click a system…" : "";
+            if (_rtbStatus != null)
+                _rtbStatus.Text = enabled ? "Click a system…" : "";
         }
-
-
 
         private void SetStatus(string text)
         {
-            if (_lblMeasure == null) return;
-            _lblMeasure.Text = text ?? "";
+            if (_rtbStatus == null) return;
+
+            _rtbStatus.Text = text ?? "";
+            _rtbStatus.SelectionStart = _rtbStatus.TextLength;
+            _rtbStatus.ScrollToCaret();
         }
 
         private void ClearStatus()
         {
             SetStatus("");
         }
+
+
 
         private static double ComputeDistanceLy(StarSystemInfo a, StarSystemInfo b)
         {
@@ -397,7 +392,6 @@ private void CenterViewportOn(int cx, int cy)
 
             _ctxHitSystem = hit;
 
-            // Ensure selection + details panel update on right-click
             try
             {
                 canvas.SetSelected(hit);
@@ -489,7 +483,6 @@ private void CenterViewportOn(int cx, int cy)
                 (hit.SystemName ?? "(unnamed)"),
                 d));
 
-            // Chain: keep this as the new start
             _measureA = hit;
             _measureAId = hit.SystemId;
         }
@@ -502,7 +495,6 @@ private void CenterViewportOn(int cx, int cy)
             if (string.Equals(_swapAId, hit.SystemId, StringComparison.OrdinalIgnoreCase))
                 return;
 
-            // Ensure selection follows click
             canvas.SetSelected(hit);
             SetSelectedSystem(hit);
 
@@ -532,15 +524,172 @@ private void CenterViewportOn(int cx, int cy)
                 return;
             }
 
-            // TEMP (until RoutePlanner is integrated): show direct distance.
-            double d = ComputeDistanceLy(start, hit);
-            SetStatus(string.Format("Route (direct):\r\n{0} → {1}: {2:0.00} ly",
-                (start.SystemName ?? "(unnamed)"),
-                (hit.SystemName ?? "(unnamed)"),
-                d));
+            string startId = start.SystemId;
+            string endId = hit.SystemId;
 
+            if (string.Equals(startId, endId, StringComparison.OrdinalIgnoreCase))
+            {
+                SetStatus("Route: start and destination are the same.");
+                _routeAId = null;
+                return;
+            }
+
+            // 1) Try gates-only route
+            var pathIds = FindGatePath(startId, endId);
+
+            if (pathIds == null || pathIds.Count < 2)
+            {
+                // Fallback: direct distance (no gate path)
+                double d0 = ComputeDistanceLy(start, hit);
+                SetStatus(string.Format("Route (direct):\r\n{0} → {1}: {2:0.00} ly\r\n(no gate path found)",
+                    (start.SystemName ?? "(unnamed)"),
+                    (hit.SystemName ?? "(unnamed)"),
+                    d0));
+
+                _routeAId = null;
+                return;
+            }
+
+            // Build human-friendly names list
+            var pathNames = new List<string>();
+            for (int i = 0; i < pathIds.Count; i++)
+            {
+                var s = FindSystemById(pathIds[i]);
+                pathNames.Add(s != null ? (s.SystemName ?? pathIds[i]) : pathIds[i]);
+            }
+
+            // Build per-leg breakdown
+            double totalLy = 0.0;
+            var sb = new System.Text.StringBuilder();
+            sb.Append("Route: ");
+            sb.Append(string.Join(" -> ", pathNames));
+            sb.AppendLine();
+            sb.AppendLine("Legs:");
+
+            for (int i = 0; i < pathIds.Count - 1; i++)
+            {
+                var a = FindSystemById(pathIds[i]);
+                var b = FindSystemById(pathIds[i + 1]);
+
+                double legLy = ComputeDistanceLy(a, b);
+                totalLy += legLy;
+
+                string fromName = (a != null ? (a.SystemName ?? pathIds[i]) : pathIds[i]);
+                string toName = (b != null ? (b.SystemName ?? pathIds[i + 1]) : pathIds[i + 1]);
+
+                sb.AppendFormat("{0}. {1} -> {2}: {3:0.00} ly (gate)",
+                    (i + 1), fromName, toName, legLy);
+                sb.AppendLine();
+            }
+
+            sb.AppendFormat("Total: {0:0.00} ly", totalLy);
+
+            SetStatus(sb.ToString());
             _routeAId = null;
         }
+
+
+        private List<string> FindGatePath(string startId, string endId)
+        {
+            if (string.IsNullOrWhiteSpace(startId) || string.IsNullOrWhiteSpace(endId))
+                return null;
+
+            startId = startId.Trim();
+            endId = endId.Trim();
+
+            if (string.Equals(startId, endId, StringComparison.OrdinalIgnoreCase))
+                return new List<string> { startId };
+
+            // Build adjacency from gateLinks
+            var adj = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+
+            if (gateLinks != null)
+            {
+                for (int i = 0; i < gateLinks.Count; i++)
+                {
+                    var l = gateLinks[i];
+                    if (l == null) continue;
+
+                    if (string.IsNullOrWhiteSpace(l.SystemAId) || string.IsNullOrWhiteSpace(l.SystemBId))
+                        continue;
+
+                    string a = l.SystemAId.Trim();
+                    string b = l.SystemBId.Trim();
+                    if (a.Length == 0 || b.Length == 0) continue;
+                    if (string.Equals(a, b, StringComparison.OrdinalIgnoreCase)) continue;
+
+                    List<string> la;
+                    if (!adj.TryGetValue(a, out la))
+                    {
+                        la = new List<string>();
+                        adj[a] = la;
+                    }
+                    la.Add(b);
+
+                    List<string> lb;
+                    if (!adj.TryGetValue(b, out lb))
+                    {
+                        lb = new List<string>();
+                        adj[b] = lb;
+                    }
+                    lb.Add(a);
+                }
+            }
+
+            if (!adj.ContainsKey(startId) || !adj.ContainsKey(endId))
+                return null;
+
+            // BFS
+            var q = new Queue<string>();
+            var prev = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            seen.Add(startId);
+            q.Enqueue(startId);
+
+            while (q.Count > 0)
+            {
+                string cur = q.Dequeue();
+                if (string.Equals(cur, endId, StringComparison.OrdinalIgnoreCase))
+                    break;
+
+                List<string> nbs;
+                if (!adj.TryGetValue(cur, out nbs)) continue;
+
+                for (int i = 0; i < nbs.Count; i++)
+                {
+                    string nb = nbs[i];
+                    if (seen.Contains(nb)) continue;
+
+                    seen.Add(nb);
+                    prev[nb] = cur;
+                    q.Enqueue(nb);
+                }
+            }
+
+            if (!seen.Contains(endId))
+                return null;
+
+            // Reconstruct path
+            var path = new List<string>();
+            string at = endId;
+            path.Add(at);
+
+            while (!string.Equals(at, startId, StringComparison.OrdinalIgnoreCase))
+            {
+                string p;
+                if (!prev.TryGetValue(at, out p))
+                    return null; // should not happen
+
+                at = p;
+                path.Add(at);
+            }
+
+            path.Reverse();
+            return path;
+        }
+
+
 
     }
 }

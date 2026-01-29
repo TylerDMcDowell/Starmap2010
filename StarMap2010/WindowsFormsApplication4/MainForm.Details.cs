@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // File: MainForm.Details.cs
 // Project: StarMap2010
 //
@@ -23,23 +23,23 @@ namespace StarMap2010
 
         private void ShowWorldCardForObject(SystemObjectInfo obj)
         {
-            if (pnlDetailsHost == null) return;
+            if (_detailsContentHost == null) return;
 
-            pnlDetailsHost.SuspendLayout();
+            _detailsContentHost.SuspendLayout();
             try
             {
-                pnlDetailsHost.Controls.Clear();
+                _detailsContentHost.Controls.Clear();
 
                 if (obj == null)
                 {
-                    pnlDetailsHost.Controls.Add(MakeDetailsHint(
+                    _detailsContentHost.Controls.Add(MakeDetailsHint(
                         "Select an item.\r\nDouble-click or right-click → View… for details."));
                     return;
                 }
 
                 if (!IsWorld(obj))
                 {
-                    pnlDetailsHost.Controls.Add(MakeDetailsHint(
+                    _detailsContentHost.Controls.Add(MakeDetailsHint(
                         "Double-click or right-click → View… for details."));
                     return;
                 }
@@ -53,11 +53,11 @@ namespace StarMap2010
                 string orbit = GetOrbitDescription(obj);
                 _worldCard.SetOrbitText(orbit);
 
-                pnlDetailsHost.Controls.Add(_worldCard);
+                _detailsContentHost.Controls.Add(_worldCard);
             }
             finally
             {
-                pnlDetailsHost.ResumeLayout(true);
+                _detailsContentHost.ResumeLayout(true);
             }
         }
 
