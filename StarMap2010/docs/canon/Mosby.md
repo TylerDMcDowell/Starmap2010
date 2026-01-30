@@ -1110,4 +1110,230 @@ Sael gave a small nod, accepting the narrow ground he was willing to offer. It w
 And less than she wished she deserved.
 Outside, the warped stars flowed on, indifferent.
 Inside the cockpit, the silence settled again — not as brittle as before, but not yet whole.
+The crossing stretched on.
+Watch rotations came and went. Ted disappeared into the ship’s deeper compartments more often than not, chasing minor faults before they could grow teeth. Mosby flew with the steady patience of a man who knew better than to fight long distances. Sael spent more time in the copilot’s seat than her assignment required, saying little, thinking too much.
+The jump did not change.
+They did.
+When the transition out of FTL finally came, it arrived like a long breath released after being held too long.
+The stars snapped back into points, hard and cold, and the low, bone-deep hum of the drive fell away into a thin ringing that lingered in the air like an echo.
+The Farther Star shuddered once, a vibration running the length of the hull as the field lattice collapsed back into normal space.
+Warning icons blinked amber across the consoles.
+Ted was already moving. “Field containment returning to nominal,” he said, fingers dancing across the diagnostic panel. “Thermal load remains elevated. Structural stress readings are… impolite.”
+Mosby let out a slow breath he hadn’t realized he was holding. “We still in one piece?”
+“Yes,” Ted said. A beat. “Define ‘comfortably.’”
+“Later,” Mosby muttered. “Where are we?”
+Sael leaned forward, studying the forward display as the sensor returns stabilized.
+The view resolved into a dense tapestry of motion.
+Sol.
+The inner system was alive with traffic. Dozens—no, hundreds—of transponder signatures threaded across the display, moving in layered corridors of light and velocity. Gate flares winked in and out of existence around the system’s periphery, each arrival and departure briefly bending starlight into impossible angles before snapping back to normal.
+Freight convoys crawled along assigned lanes like glowing beads on invisible wires. Passenger liners glided in stately arcs toward orbital hubs. Military patrol craft held quiet positions near the major junctions, their transponders crisp and unmistakable.
+And threaded through it all was the constant murmur of traffic control, overlapping channels of clearances, advisories, routing adjustments—an endless, patient voice of a system that never slept.
+Sael exhaled softly. “All gates lead to Sol.”
+“Yeah,” Mosby said. “And everybody shows up eventually.”
+Ted tilted his head, watching the traffic density map update. “We are not conspicuous,” he observed.
+“Let’s keep it that way,” Mosby replied.
+He nudged the maneuvering controls, easing the Star’s velocity down into the lower end of the local traffic band. The ship settled into the flow, one more tired freighter among hundreds of others that had crossed too much distance and seen too much vacuum.
+“File a minor systems stress report,” Mosby said. “Nothing dramatic. We’re a hauler that pushed her drive too hard and needs a breather. That’s a story Sol hears every hour.”
+Sael’s hands moved over the comm panel, voice steady and professional as she transmitted the report. “Requesting low-priority inspection window and temporary berth. No hazardous cargo. No passenger services required.”
+Ted glanced at the drive readouts again. “A pressurized berth would be… appreciated.”
+Mosby gave him a sideways look. “You mean for the ship, right?”
+Ted’s eyes shifted toward him. “Primarily.”
+Traffic control responded a moment later, voice calm, almost bored. A berth assignment. A projected delay. A routing corridor to follow.
+Routine. Unremarkable.
+Exactly what Mosby wanted.
+The Farther Star slid deeper into the system, swallowed by the organized chaos of humanity’s busiest crossroads.
+Behind them, the FTL jump, the storm was already just another line in a log.
+Ahead, multiple gates burned steadily, each one a doorway to somewhere else.  
+
+“Sol’s Grand Central Gates” Mosby remarked.  “More tonnage goes through there is a day that most systems see in a year.”
+Mosby watched the flow of ships around them, hands light on the controls.
+“Stay small,” he said quietly. “Stay boring.”
+Sael glanced at him, then back out at the impossible sprawl of motion and light.
+For the first time since leaving New Horizon, they could assume no one was chasing them.
+For the moment, they were just another ship in the crowd.
+And that, Mosby knew, was as close to safe as the galaxy ever got.
+
+The berth wasn’t glamorous.
+A rotating service drum bolted onto the spine of one of Sol’s older orbital yards, its interior lined with docking cradles that had seen decades of tired freighters and overworked haulers. The Farther Star settled into one of them with a soft, hollow thud that carried through the deck as the clamps engaged.
+External power umbilicals extended and locked into place. A moment later, the ship’s systems sighed as station load replaced strain.
+“Finally,” Mosby muttered.
+Ted was already moving before the dock seals finished cycling.
+By the time Mosby reached engineering, two access panels were open and a diagnostic lead was snaked deep into the drive housing. The smell of hot metal and polymer sealant hung in the air, sharp and familiar.
+“How bad?” Mosby asked, leaning in the hatchway with a mug of something that claimed to be coffee.
+Ted did not look up. “We remain spaceworthy,” he said. “Define ‘proudly.’”
+Mosby grunted. “You’ll tell me when it gets expensive.”
+“It already is.”
+He reached past Ted to tap a readout. “You gonna need help?”
+Ted paused, considering the display as if the answer were hiding there. “Yes,” he said simply.
+He keyed a short transmission, voice low and precise.
+Within an hour, three Talari arrived.
+They came without uniforms, insignia, or visible affiliation. One carried a tool case older than the Star. Another had a sling of diagnostic filaments looped over one shoulder like climbing rope. The third moved with the careful gait of someone whose joints had been replaced more than once and expected to be replaced again.
+They did not introduce themselves.
+They did not need to.
+Ted inclined his head in greeting. Subtle shifts of posture passed between them — information exchanged faster than language.
+Mosby watched from the corridor. “You just… call people?”
+“I indicated assistance would be efficient,” Ted said.
+“And they just show up?”
+“Yes.”
+“Do they want paying?”
+Ted considered. “Not in the way you mean.”
+The Talari slipped into the open compartments with quiet competence. One began recalibrating a warped field bracket. Another laid fresh sealant mesh along a stressed conduit. The third connected to the diagnostic bus and began reading logs.
+They worked without chatter. But now and then one would pause, head tilting slightly, eyes unfocusing for a heartbeat — receiving, considering, passing something along.
+Sael noticed.
+“They’re sharing,” she said quietly.
+Ted glanced at her. “We are not good at keeping what we learn to ourselves.”
+Mosby folded his arms. “About the ship, I hope.”
+Ted did not answer immediately.
+“Primarily,” he said at last.
+________________________________________
+Mosby left them to it.
+In the galley, he scrolled through the delayed message queue. Most of it was routing chatter and automated confirmations that had tried to follow them along standard trade paths. A few invoices. One mildly irritated note from a broker wondering why a shipment acknowledgment had originated from the wrong system.
+No new contracts. No fresh jobs.
+“Shortcut,” he muttered. “Saves time, costs everything else.”
+He closed the display and pulled on a jacket that had seen more ports than he had.
+Sael found him at the hatch.
+“Going somewhere?” she asked.
+“Salt broker,” he said. “Renew the Helion. Then food. Real food. I’m not eating another tube of protein medley unless it apologizes.”
+She hesitated only a moment. “I’ll come.”
+Mosby shrugged. “Suit yourself. It’s not glamorous.”
+“I didn’t expect it to be.”
+Sol’s yard concourses were never quiet.
+The corridor outside the berth opened into a wide service spine crowded with cargo haulers, dockhands, traders, and crews on short leave. Overhead displays flickered with arrival schedules and berth rotations. The air smelled faintly of ozone, machinery oil, and a dozen different cuisines competing for attention.
+They moved through it side by side, not touching, not speaking at first.
+Mosby stopped at a fuel services kiosk wedged between a parts recycler and a stall selling fried noodles from a vat that had probably outlived several empires. He leaned on the counter, exchanging quiet words with a clerk who looked like he’d been born tired.
+“Salt renewal slot in twelve hours,” Mosby said as they stepped away. “We’ll top off before we leave.”
+Sael nodded. “Good.”
+They found a food stall with actual vegetables — a luxury by spacer standards — and carried their trays to a narrow counter overlooking a wide viewport.
+Beyond the glass, ships drifted in layered motion, tugs guiding freighters into cradles, shuttles flitting between platforms, traffic lights blinking in silent choreography.
+For a while, they just ate.
+Mosby watched the traffic. Sael watched him watching it.
+“You don’t seem impressed,” she said at last.
+“By Sol?” he asked.
+“Yes.”
+He shrugged. “Big is just big. Means more ways to get lost. More ways to get stepped on.”
+Sael considered that. “Most people see opportunity.”
+“Most people aren’t trying not to be noticed.”
+She studied him a moment longer. “You’ve been doing this a long time.”
+“Long enough.”
+“Do you ever think you should have done more?” she asked quietly.
+Mosby didn’t look at her. “Doing the job in front of you is already more than most manage.”
+She let that sit between them.
+Traffic flowed past in silent arcs of light.
+Neither of them said what they were thinking.
+But the distance between them had changed — just a little.
+Back at the berth, the Talari moved through the Farther Star like careful ghosts, tools whispering, information flowing in quiet currents Mosby would never see.
+They stayed at the counter longer than the food required.
+Beyond the viewport, a bulk freighter rotated slowly under tug guidance, its hull scarred and layered with paint from a dozen ports. Smaller craft moved around it in careful arcs, every motion measured, anticipated, approved.
+Sael rested her elbows lightly on the counter, fingers curled around the edge of her tray.
+“You said most people aren’t trying not to be noticed,” she said.
+Mosby took a slow sip from his cup. “That’s the trick.”
+“Staying small?”
+“Staying alive.”
+She watched the freighter drift past. “You make it sound like those are the same thing.”
+“Usually are.”
+A pause.
+“And when they’re not?” she asked.
+Mosby’s gaze shifted, not to her, but to a patrol cutter sliding along a distant traffic lane, its transponder crisp and official.
+“Then you pick the one you can live with afterward,” he said.
+Sael was quiet for a moment.
+“You’ve had to make that choice before.”
+“Everyone has,” Mosby said.
+“Not like you.”
+That made him glance at her.
+She didn’t look away.
+“You disobeyed a direct order.”
+Mosby’s mouth twitched faintly. “That’s one way to put it.”
+“You chose people over the mission.”
+“I chose the people in front of me,” he said. “The mission was somewhere else.”
+Sael absorbed that.
+“In my line of work,” she said slowly, “we’re taught that the bigger picture matters more than any one piece of it.”
+“Must make it easier,” Mosby said.
+She looked down at her hands. “It’s supposed to.”
+The noise of the concourse swelled and faded around them — footsteps, voices, the distant whine of docking clamps cycling.
+“You don’t believe that,” he said.
+Sael didn’t answer right away.
+“I believe systems matter,” she said at last. “Structures. Stability. Without them, everything falls apart.”
+“Yeah,” Mosby said. “But when something’s breaking right in front of you, you don’t get to tell it to wait for the system to catch up.”
+Her lips curved slightly. Not quite a smile.
+“You make it sound simple.”
+“It isn’t,” he said. “It’s just immediate.”
+Sael studied him openly now.
+“You don’t seem to want anything,” she said.
+Mosby snorted. “I want my ship to hold together and my food not to come out of a tube.”
+“I mean beyond that.”
+He looked back out at the traffic web.
+“I had my turn at wanting big things,” he said. “Didn’t go great.”
+“That doesn’t stop most people.”
+“I’m not most people.”
+“No,” Sael agreed quietly.
+The words carried more weight than she intended.
+For a moment neither of them spoke.
+A transport liner drifted past the viewport, its hull lights tracing a slow, graceful curve toward an inner dock. Thousands of people aboard, each with somewhere to be, something they believed mattered.
+Sael’s voice, when she spoke again, was softer.
+“Do you ever get tired,” she asked, “of being the one who carries it?”
+Mosby didn’t ask what it was.
+“Yeah,” he said. “But dropping it doesn’t make it lighter.”
+She held his gaze a second longer than she meant to.
+Something shifted there — not dramatic, not declared. Just an awareness, newly sharpened.
+Then she looked away first.
+“We should get back,” she said. “Ted will have taken half the ship apart by now.”
+“Only half?” Mosby said. “He’s slipping.”
+She let out a quiet breath that might have been a laugh.
+They stood, trays in hand, and rejoined the flow of the concourse — two figures among thousands, carrying more between them than either had planned to.
+
+They didn’t speak much on the walk back.
+The noise of the station wrapped around them again — cargo carts whining past, dock crews arguing in three languages at once, announcements chiming overhead with the patient indifference of infrastructure that outlived empires. The smell shifted every dozen meters: oil, ozone, spice, hot metal, recycled air breathed by a million strangers.
+Sael moved through it smoothly, not hurried, not hesitant. But Mosby noticed she watched everything. Reflections in viewport glass. Security patrol patterns. The way people avoided certain corridors without looking like they were avoiding them.
+Mosby watched her for another few steps, then said,
+“Intelligence training teach you that?”
+Sael didn’t look at him.
+“Which part?”
+“The way you check exits without turning your head.”
+A beat passed.
+“Logistics teaches you where people get trapped, intelligence teaches the rest,” she said.
+Mosby gave a quiet grunt.
+“Yeah,” he said. “It does.”
+They reached the service spine leading back toward their berth. Traffic thinned here, shifting from transient crowds to crews who knew exactly where they were going and had no interest in conversation. A maintenance drone hummed past at shoulder height, trailing fiber cable like a tail.
+The Farther Star came into view around the curve of the drum — hull panels open, work lights glowing inside her like a ship laid bare on an operating table.
+Except there were fewer lights than before.
+One of the Talari was sealing a panel. Another disconnected a diagnostic filament and coiled it with precise, economical movements. The third stood still for a moment, head tilted, eyes unfocused — receiving, considering, concluding.
+Ted emerged from beneath the forward housing just as Mosby and Sael stepped onto the docking gantry.
+“We are ahead of projection,” he said.
+Mosby blinked. “That so?”
+“Yes. Cooperative cognition improves efficiency.”
+“Translation,” Mosby muttered, “you worked fast.”
+“Yes.”
+Sael looked over the hull. “How much fast?”
+Ted glanced at a readout pad. “Structural grace restored. Thermal tolerances improved. I am now only mildly offended by the drive’s behavior.”
+Mosby nodded toward the open bay. “She gonna hold together?”
+“Yes,” Ted said. Then, after a fractional pause, “With personality.”
+“Wouldn’t be my ship without it,” Mosby replied.
+He checked the time on his wrist display. “Helion top-off window’s in six hours. We don’t miss that.”
+“We will not,” Ted said. “I have already requested line access and pre-flush clearance.”
+Mosby stopped mid-step. “You what?”
+Ted tilted his head. “Efficiency.”
+Sael hid a small smile.
+Inside the ship, the air smelled like warm metal and solvent instead of strain and overheated composites. The Talari moved through the compartments one last time, hands brushing panels, verifying work without tools — like musicians tuning by ear.
+One paused near Mosby as he watched.
+Dark eyes met his.
+A subtle nod.
+Work complete.
+No words exchanged. None needed.
+Mosby looked around the cargo bay — crates secured, straps tight, nothing out of place. The Star felt… settled. Not fresh. Not new.
+But ready.
+He exhaled slowly.
+“Good,” he said. “We refuel, we file departure, and we get small again.”
+Sael glanced toward the station beyond the gantry, where traffic moved in endless layers.
+“For how long?” she asked.
+Mosby didn’t answer right away.
+“Long enough,” he said at last.
+Ted, halfway up a ladder, paused and looked back toward the hatch — not at Mosby, not at Sael, but toward the open corridor beyond the ship, where the station lights flickered against moving hulls.
+“Attention,” he said quietly.
+Both of them turned.
+“Not on us,” Ted added after a moment. “Yet.”
+The Star sat silent in her berth, systems resting, tanks soon to be full again.
+Outside, Sol turned on — vast, indifferent, and never truly asleep.
+Inside, they prepared to leave it behind.
+
+
 
