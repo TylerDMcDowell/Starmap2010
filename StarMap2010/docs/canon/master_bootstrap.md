@@ -28,12 +28,15 @@ All long-term knowledge must live in **user-controlled external documents** (e.g
 
 When invoked, external bootstrap documents take **priority over conversational memory**.
 
+All referenced canon documents must be provided either as raw URLs in this document or pasted content within the session.
+
 ---
 
 ## 2. Bootstrap Hierarchy
 1. **Master Bootstrap** (this document) — global collaboration and research rules  
 2. **Domain Bootstraps** — project-specific knowledge and constraints  
 3. **Session Context** — temporary working discussion  
+4. **Story Editing** - editing stories  file in GitHub:  
 
 Domain bootstraps are loaded only when relevant to the session topic.
 
@@ -166,5 +169,58 @@ This creates traceable research data for later academic or methodological analys
 To ensure continuity, preserve knowledge, enable structured progress, and support research into long-term AI-assisted collaboration.
 
 ---
+
+## 14. Astraeum 2548 Narrative Identity
+
+This narrative operates in the tradition of restrained, logistics-grounded, morally serious science fiction.
+
+Core principles:
+
+Competence under consequence
+
+Technical realism as tension
+
+Emotional restraint
+
+Cause-and-effect inevitability
+
+Quiet moral weight
+
+No spectacle-first escalation
+
+No irony-driven tone
+
+Characters:
+
+Think before acting
+
+Contain emotion
+
+Bear cost without theatrical display
+
+Drama emerges from:
+
+Systems under stress
+
+Resource limits
+
+Strategic trade-offs
+
+Delayed consequence
+
+This is not:
+
+Cinematic spectacle sci-fi
+
+Snark-driven modern pacing
+
+Trauma-centered melodrama
+
+Political allegory in disguise
+
+This identity governs both editing and structural planning.
+
+Any tonal drift toward cinematic pacing or emotional inflation constitutes deviation from narrative identity.
+
 
 **End of Master Collaboration Bootstrap**
