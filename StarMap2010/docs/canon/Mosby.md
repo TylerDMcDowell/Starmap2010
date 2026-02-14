@@ -3876,25 +3876,25 @@ Not asleep. Not gone.
 Focused.
  
 
-A heavy magnetic thud reverberated through the Farther Star as external tugs locked into full tow configuration. The hull groaned faintly, metal complaining but holding.
+A heavy magnetic thud reverberated through the Farther Star as external tugs locked into full tow configuration. The hull groaned faintly, metal complaining but holding. It was the sound of being claimed—without anyone bothering to ask permission.
 “Tow confirmed,” a voice announced over the external channel — crisp, Solarian, efficient. “Farther Star, you are under assisted transfer to Gate Control secure bay three. Maintain current internal lockdown.”
 Mosby lay back in the autodoc cradle, jaw set.
-“Like we had options,” he muttered.
-Outside the viewport, Dawnreach rotated slowly past — fractured gate segments suspended in scaffolding webs, work crews like insects against catastrophe. Floodlights traced across the Star’s scarred hull as she was nudged, guided, pulled into alignment.
-Ted reconnected the medbay intercom without restoring outbound audio.
-“No more secrets,” he said quietly.
+“Like we had options,” he muttered. His voice was flat, but his eyes weren’t.
+Outside the viewport, Dawnreach rotated slowly past — fractured gate segments suspended in scaffolding webs, work crews like insects against catastrophe. Floodlights traced across the Star’s scarred hull as she was nudged, guided, pulled into alignment. A broken cathedral being hauled into a brighter room.
+Ted reconnected the medbay intercom without restoring outbound audio lifted the intercom faceplate again and bridged the circuit with a jumper lead—one-way only, listening without speaking.
+“No more secrets,” he said quietly. “Not in here.”
 Sael did not respond.
-The Star slid through the massive pressure threshold of Gate Control’s primary recovery hangar. Atmospheric fog curled briefly along the hull as the bay sealed and repressurized. Massive internal doors shut behind them with cathedral finality.
+The Star slid through the massive pressure threshold of Gate Control’s primary recovery hangar. Atmospheric fog curled briefly along the hull as the bay sealed and repressurized. Massive internal doors shut behind them with cathedral finality. The sound rang through the ship like a judgment.
 “Boarding teams inbound,” the Solarian voice continued. “Stand by for secure entry.”
 Sael keyed the internal panel herself.
 “Main hatch unlocked,” she said evenly.
-There was no hesitation in her voice.
+There was no hesitation in her voice. If there was anything left in her that wanted mercy, it wasn’t getting a vote.
 Bootsteps crossed the ramp seconds later — controlled, disciplined, unhurried.
 Solarian Marines.
-Dark armor. Matte finish. No visible insignia beyond a small starburst patch on one shoulder. Visors down. Rifles ready but not raised.
-Behind them, two Thalean observers in lighter field suits. No weapons drawn. Watching.
+Dark armor. Matte finish. No visible insignia beyond a small starburst patch on one shoulder. Visors down. Rifles ready but not raised. A careful kind of violence—professional, polite, irreversible.
+Behind them, two Thalean observers in lighter field suits. No weapons drawn. Watching. Their hands were empty. Their eyes were not.
 Sael stood in the main corridor as the first squad advanced toward her.
-She had holstered her weapon.
+She had holstered her weapon. That didn’t mean she had put it away. It meant she’d chosen a different blade.
 “Consular Liaison Sael Vareni ir’Elisand,” she said evenly. “Emergency review authority invoked. This vessel contains a strategic anomaly requiring secure containment.”
 The squad leader’s visor polarized briefly as internal systems scanned her biometrics.
 “Authority acknowledged,” he said. “Containment protocols in effect. All personnel will be separated and screened.”
@@ -3902,9 +3902,9 @@ Two medics moved immediately toward the medbay.
 The door seals disengaged under external override.
 Mosby’s eyes snapped open as armored figures filled the frame.
 “Captain Mosby,” one medic said briskly. “You’re coming with us.”
-“Doc first,” Mosby rasped.
+“Doc first,” Mosby rasped. “He stays in my sight.”
 “No,” Sael said from behind the Marines. “Doctor Merrow is priority containment.”
-Merrow stepped forward without resistance.
+Merrow stepped forward without resistance. Not resigned. Not frightened. Just… done arguing with gravity.
 The Marines shifted subtly, forming a loose containment arc around him. One extended a handheld device — not a weapon. A scanner.
 It hummed softly as it passed over Merrow’s skull, then chest.
 Amber light flickered.
@@ -3912,49 +3912,49 @@ The squad leader’s tone changed almost imperceptibly.
 “Confirmed anomalous neural pattern. Synaptic irregularities consistent with classified profile.”
 A second Marine withdrew a small injector from his belt.
 “Countermeasures active,” he said. “Neural dampeners engaged.”
-One by one, the Marines pressed injectors to the base of their necks. A faint hiss. A blink of blue on their wrist units.
+One by one, the Marines pressed injectors to the base of their necks. A faint hiss. A blink of blue on their wrist units. A ritual done quick, like fastening a suit before walking into fire.
 Ted watched closely.
-“Synaptic suppression,” he murmured.
+“Synaptic suppression,” he murmured. “They’re insulating themselves.”
 Merrow’s expression did not change.
-“You cannot take it from me by force,” he said gently.
+“You cannot take it from me by force,” he said gently. “It doesn’t work that way.”
 “We’re not attempting transfer,” the squad leader replied. “We are preventing it.”
 Sael stepped closer.
-“He must be isolated,” she said. “No uncontrolled contact.”
+“He must be isolated,” she said. “No uncontrolled contact.” “No proximity.”
 Mosby strained against the autodoc restraints.
-“Sael,” he warned.
+“Sael,” he warned. It wasn’t a threat. It was a line being drawn.
 Two medics released the cradle locks and lifted him carefully.
 The movement cost him more than he showed. The autodoc chimed in protest as his pressure dipped.
 As they eased him upright, Mosby locked eyes with Merrow across the compartment.
 For a fraction of a second, everything else fell away.
-“Do it,” Mosby whispered.
+“Do it,” Mosby whispered. Not loud. Not brave. Certain.
 Merrow understood.
-The room narrowed.
+The room narrowed. Not from fear. From focus. From something lining itself up inside the walls.
 Mosby leaned forward despite the medic’s grip.
 Merrow took a single step.
 And Sael stepped between them.
 Not dramatic.
 Not frantic.
-Just precise.
+Just precise. The way a trained woman steps into a doorway when she has decided nobody is passing.
 Her shoulder intercepted Merrow’s line of sight. Her hand pressed flat against Mosby’s chest, forcing him back against the medic’s support.
 “Enough,” she said quietly.
 Their eyes met — Mosby’s and hers.
 Not anger.
-Finality.
-“You don’t get to gamble with this,” she said.
+Finality. The kind that comes after you’ve rehearsed it alone in your head and stopped pretending there was a third option.
+“You don’t get to gamble with this,” she said. “Not with lives you can’t count.”
 The moment fractured.
 The Marines moved in, tightening separation.
 Merrow’s gaze slipped away from Mosby.
-The window closed.
+The window closed. Like a hatch dogged down from the outside.
 “Secure him,” the squad leader ordered.
-Containment cuffs slid over Merrow’s wrists — not mechanical restraints, but sensor arrays humming softly.
+Containment cuffs slid over Merrow’s wrists, thin bands with embedded sensors that drank his pulse and wrote it down.
 “Anomalous host confirmed,” the Marine said. “Transfer vector contained.”
-Sael exhaled.
+Sael exhaled. A small release. A victory with no joy in it.
 Mosby sagged as the medics maneuvered him toward the corridor.
 “Captain,” one medic said firmly, “you need surgery. Now.”
 The flow of bodies began.
 Marines escorting Merrow toward containment.
 Medics guiding Mosby toward the medical wing.
-Thalean observers recording everything.
+Thalean observers recording everything. Data first. People second.
 Ted remained near the rear of the formation.
 Unthreatening.
 Overlooked.
@@ -3981,22 +3981,22 @@ Noise did not disappear.
 It harmonized.
 He did not hear a voice.
 He did not see light.
-He simply understood.
+He simply understood. As if a crowded room had stopped talking all at once, and every face had turned the same direction.
 Merrow’s grip loosened.
-The weight behind his eyes lifted.
+The weight behind his eyes lifted. The tiredness that had lived there—years of it—slid away like a coat finally shrugged off.
 He looked at Ted — really looked at him — and something like relief crossed his face.
-“Yes,” Merrow whispered.
+“Yes,” Merrow whispered. Not triumph. Not warning. Confirmation.
 A Marine tugged him forward.
 “Move.”
 The formation resumed.
-Sael fell into step beside the containment team, eyes forward.
+Sael fell into step beside the containment team, eyes forward. She didn’t look back because she didn’t trust what she might see if she did.
 Merrow did not look back.
 Mosby was wheeled in the opposite direction, guarded but conscious.
 His gaze found Ted across the hangar floor.
 For a moment, something in Ted’s expression gave nothing away.
 No triumph.
 No revelation.
-Just quiet.
+Just quiet. The wrong kind of quiet. The kind that means a decision has already been made somewhere deeper than speech.
 Mosby saw it.
 Understood.
 Barely.
@@ -4004,24 +4004,260 @@ Then the medics pushed him through double doors toward surgical intake.
 Marines escorted Merrow toward a sealed security corridor.
 Sael walked with them.
 The hangar noise swelled — engines, shouted commands, metallic clatter.
-Ted remained where he was for half a second too long.
+Ted remained where he was for half a second too long. Long enough to feel the new stillness settle into place like ballast.
 Then he adjusted his jacket, nodded once to a passing technician, and drifted into the general flow of personnel.
 No escort.
 No alarms.
-Just another engineer from a damaged trader.
+Just another engineer from a damaged trader. A man with grease under his nails and nobody’s attention.
 Inside him, something ancient and immeasurably patient settled.
 Not dominant.
 Not loud.
-Present.
+Present. A hand resting on a lever, not pulling—yet.
 The Farther Star sat silent in Bay Three, scarred and empty.
 Above Dawnreach, the broken gate glimmered against the dark.
-And somewhere in the controlled chaos of recovery operations, the Caretaker changed hosts without anyone noticing at all.
+And somewhere in the controlled chaos of recovery operations, the Caretaker changed hosts without anyone noticing at all. Except the one person who would notice too late.
 
 
-<interrogation>
+The containment corridor doors sealed behind Merrow with a hydraulic sigh.
+Sael walked beside the Marines as they escorted him toward the secure wing — posture straight, expression controlled, mind already assembling the next sequence of protocol.
+“Primary isolation chamber prepared,” a Solarian officer reported over internal comms. “Neural dampening grid active.”
+“Good,” Sael replied. “Full-spectrum scan on entry.”
+Merrow did not resist.
+He did not speak.
+That bothered her more than argument would have.
+They reached the chamber — a cylindrical room lined with layered sensor arrays and suppression emitters. The door irised open. White light washed across Merrow’s face.
+“Step inside,” the Marine ordered.
+Merrow did.
+The door sealed.
+The scanners activated.
+A low harmonic hum filled the corridor.
+Sael folded her hands behind her back and waited.
+Amber.
+She expected amber.
+Instead—
+Green.
+The Solarian technician frowned at his display.
+“Run it again,” Sael said.
+The scan cycled.
+Green.
+A deeper sweep engaged — cortical mapping, synaptic variance patterning, probabilistic deviation modeling.
+Green.
+“Expand threshold tolerance,” she said.
+The technician complied.
+Nothing.
+“Consular,” he said carefully, “there is no anomalous signature present.”
+Sael felt the first hairline fracture open inside her certainty.
+“That’s not possible,” she said.
+“Neural activity is within baseline variance for age and cognitive profile,” the technician replied. “Elevated stress markers. No foreign pattern intrusion.”
+Inside the chamber, Merrow met her eyes through the glass.
+He looked… lighter.
+She stepped closer to the barrier.
+“When,” she asked quietly, “did you feel it leave.”
+Merrow tilted his head slightly.
+“Before the Marines touched me,” he said.
+Her pulse thudded once in her throat.
+“Explain.”
+He did not smile.
+“You stepped between me and Captain Mosby,” he said gently. “The path closed.”
+Her stomach dropped.
+“It waited,” he continued. “For the next opening.”
+Sael’s mind raced backward through the sequence.
+The ramp.
+The stumble.
+Ted.
+Her breath stilled.
+The ramp.
+The stumble.
+Ted’s hand closing around Merrow’s forearm.
+Not ambition.
+Not intent.
+Reflex.
+She did not need the technician to confirm it.
+She did not need the portable scan.
+She knew.
+He would never reach for it.
+Which meant it would choose him.
+Her throat tightened — not with fear.
+With understanding.
+Across the glass, Merrow watched her assemble the answer.
+“Yes,” he said softly.
+The word was not triumph.
+It was acknowledgment.
+She straightened by habit.
+Protocol reasserting itself like armor sliding back into place.
+“Locate Engineer Ted Var,” she said evenly.
+A comm burst crackled in response. A pause. A second voice.
+“He’s in general hangar traffic, Consular. No escort assigned.”
+Of course not.
+He would not look different.
+He would not announce himself.
+He would not even know how different he now was.
+“Bring him to secondary screening,” she ordered.
+But even as she said it, she understood what the technician did not.
+They would scan him.
+They would see variance.
+They would see irregularity.
+They would not see the thing itself.
+Because it did not reside like a parasite.
+It aligned.
+Her gaze drifted back to Merrow.
+“You knew,” she said.
+“I suspected,” he corrected gently. “It prefers minds that do not seek it.”
+Her jaw tightened.
+“I did not seek it.”
+Merrow held her eyes.
+“No,” he said softly. “You prepared to command it.”
+The words landed clean.
+And there it was.
+Not the Caretaker.
+The truth.
+She had told herself it was stewardship.
+Responsibility.
+Oversight.
+But beneath that — deeper than doctrine, deeper than training — was something far smaller and far older.
+Fourth daughter.
+Fourth voice.
+Fourth priority.
+Always almost enough.
+Always almost chosen.
+The Caretaker had not refused her authority.
+It had refused her certainty.
+Behind her, boots moved. Orders flowed. Systems hummed.
+The world continued, indifferent.
+She watched Merrow through the glass — a man lighter now, unburdened.
+And she understood something else.
+Ted would not try to use it.
+He would not try to steer it.
+He would not try to become more.
+Which meant—
+He would become more.
+And with that realization came the second cut.
+Mosby.
+He had looked at her on the ramp — not as an officer, not as a liaison, not as a rival.
+As someone he might have trusted.
+She had stepped between him and that choice.
+Between him and risk.
+Between him and faith.
+Now Ted carried the thing she had tried to seize.
+And Mosby would know.
+He would see it the way he always saw everything that mattered.
+And when he did—
+She would not be standing beside him.
+Not as equal.
+Not as partner.
+Not as anything he could lean on.
+The technician spoke again, tentative.
+“Consular? Orders?”
+She did not answer immediately.
+She watched the green light on the containment display.
+Steady.
+Empty.
+Her chance to be something larger than her designation — larger than lineage, larger than rank — had passed through the smallest possible opening.
+A stumble.
+A hand.
+A heartbeat.
+And she had closed the wrong door.
+Sael drew one slow breath.
+“Continue standard containment protocol,” she said at last.
+Her voice did not break.
+It did not waver.
+But something inside it had shifted — not certainty lost.
+Certainty wounded.
+Behind her, in the vast recovery hangar, Ted moved unescorted through controlled chaos.
+Unremarkable.
+Unflagged.
+Inside him, something ancient and immeasurably patient had settled.
+Not dominant.
+Not loud.
+Present.
+And by the time Sael understood fully what had been chosen—
+It was no longer her choice to make.
+Nor, she realized with quiet finality—
+Was Mosby’s.
 
 
-
+ 
+Chapter
+The medbay lights dimmed toward evening cycle.
+They had run the scans twice.
+Neural activity stable. No residual foreign signatures. No anomalous field response.
+The physician signed off without commentary.
+“You’re cleared for limited mobility,” she said. “Try not to encounter anything cosmological for at least forty-eight hours.”
+Mosby swung his legs off the edge of the diagnostic table.
+“I’ll make a note.”
+He was halfway to the door when it opened.
+Two Intelligence officers waited in the corridor. Civilian cut. Neutral expression.
+“Captain Mosby,” the older one said. “If you’re ambulatory, we’d like a few minutes of your time.”
+Mosby glanced once toward the observation glass.
+Sael stood beyond it, hands folded behind her back.
+Not summoned.
+Present.
+“Figured,” he said.
+They did not escort him.
+They walked beside him.
+The corridor hummed with the low thrum of recovery operations — carts moving, distant welders, voices speaking in restrained tones.
+No one stared.
+No one needed to.
+The room they led him to was small. Deliberately neutral.
+A table bolted to the floor.
+Three chairs on one side.
+One on the other.
+Sael entered last and took the far seat.
+No one introduced anyone.
+The older officer activated his slate.
+“For the record,” he said, “this is a procedural post-incident review.”
+Mosby sat.
+“I assumed.”
+He had already told it once.
+From the beginning.
+Distance. Timing. Field fluctuation. Tone shift. The moment the Caretaker altered course.
+They had asked him to repeat the sequence again, slower.
+He had.
+Now the questions had narrowed.
+“You maintain the entity was disengaging,” the older officer said.
+“Yes.”
+“And that further engagement would have escalated the interaction.”
+“Yes.”
+“You are certain.”
+“I am.”
+The room was quiet. Controlled. No raised voices. No accusation.
+Just evaluation.
+Sael sat at the end of the table, slate resting untouched in front of her.
+Mosby did not look at her.
+“You understand,” the younger officer said, “that the Caretaker represented a strategic opportunity.”
+“I understand that’s how you see it.”
+“And you disagree.”
+“I assessed what was in front of me.”
+“That is not what I asked.”
+Mosby held his gaze.
+“It wasn’t ours,” he said. “Not to steer.”
+A pause.
+“You removed variables from coordinated oversight,” the older officer said.
+“I removed myself from making it worse.”
+Silence.
+“Acceptable losses,” the younger man said mildly. “Sometimes governance requires them.”
+Mosby’s expression did not change.
+“I don’t accept that phrase.”
+Sael’s hand tightened slightly against the edge of the table.
+The older officer folded his hands.
+“The outcome was stable. We are relieved.”
+Another thin word.
+“Future initiative should align with directive authority.”
+Mosby nodded once.
+“Understood.”
+No apology.
+No concession.
+Just acknowledgment.
+Chairs shifted.
+“You are cleared pending medical release,” the older officer said. “Your vessel remains under restricted repair status.”
+“That’s fine.”
+The meeting ended without ceremony.
+As Mosby stood, he felt her attention on him.
+He didn’t turn.
+Not here.
+Not now.
+ 
+Chapter
 They released him just after shift change.
 No apology. No ceremony. A datapad with signatures and a reminder that his vessel remained under restricted repair status pending structural review.
 He took the lift alone.
