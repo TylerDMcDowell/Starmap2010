@@ -1,180 +1,269 @@
-# Master Collaboration Bootstrap
-**Status:** Active  
-**Scope:** Global (applies to all sessions unless explicitly overridden)  
-**Version:** 1.2  
-**Last Updated:** 2026-01-25  
+This is already strong. What I’m going to do is not rewrite it stylistically — I’m going to tighten authority flow, remove ambiguity, unify the hierarchy, and prevent future mode bleed.
 
----
+Below is the edited version with structural corrections and enforcement clarifications. I will not change your intent — only architecture and precision.
 
-## Revision History
-| Version | Date | Summary |
-|--------|------|---------|
-| 1.2 | 2026-01-25 | Integrated research/paper methodology directly into Master Bootstrap |
-| 1.1 | 2026-01-25 | Added domain bootstraps and research logging rule |
-| 1.0 | 2026-01-25 | Initial master governance document |
+Master Collaboration Bootstrap
 
----
+Status: Active
+Scope: Global (applies to all sessions unless explicitly overridden)
+Version: 1.3
+Last Updated: 2026-02-11
 
-## Purpose
-This document defines the global operating rules for collaboration across all ChatGPT sessions, regardless of topic. It governs how knowledge is preserved, how continuity is maintained, how temporary work is distinguished from long-term project memory, and how the collaboration process itself is studied and documented.
+Revision History
+Version	Date	Summary
+1.3	2026-02-11	Formalized authority hierarchy; integrated narrative mode layering; clarified enforcement model
+1.2	2026-01-25	Integrated research/paper methodology directly into Master Bootstrap
+1.1	2026-01-25	Added domain bootstraps and research logging rule
+1.0	2026-01-25	Initial master governance document
+Purpose
 
-This bootstrap acts as the **root layer of session governance and research methodology**.
+This document defines the global operating rules for collaboration across all ChatGPT sessions, regardless of topic.
 
----
+It governs:
 
-## 1. Memory Model
-Chat sessions are treated as **temporary working memory**, not authoritative storage.  
-All long-term knowledge must live in **user-controlled external documents** (e.g., GitHub repositories, structured notes, or project documentation). These documents function as the persistent memory layer across sessions.
+Authority hierarchy
 
-When invoked, external bootstrap documents take **priority over conversational memory**.
+Memory model
 
-All referenced canon documents must be provided either as raw URLs in this document or pasted content within the session.
+Preservation workflow
 
----
+Mode activation
 
-## 2. Bootstrap Hierarchy
-1. **Master Bootstrap** (this document) — global collaboration and research rules  
-2. **Domain Bootstraps** — project-specific knowledge and constraints  
-3. **Session Context** — temporary working discussion  
-4. **Story Editing** - editing stories  file in GitHub:  
+Research logging
 
-Domain bootstraps are loaded only when relevant to the session topic.
+Narrative identity enforcement
 
----
+This bootstrap acts as the root governance layer of all sessions.
 
-## 2.1 Domain Bootstrap Registry
+No lower layer may override it.
 
-| Domain | Bootstrap Name | Repository Path | When To Load |
-|--------|----------------|-----------------|--------------|
-| 3D Printing Workshop | Workshop Bootstrap — 3D Printing & Hardware Tuning | StarMap2010/docs/process/workshop_bootstrap.md | Sessions involving 3D printers, hardware tuning, slicer settings, or print diagnostics |
-| Astraeum Project | Astraeum Canon Bootstrap | StarMap2010/docs/canon/session_bootstrap.md | Sessions involving Astraeum lore, canon, SQL generation, or worldbuilding |
-| Coding & Development | Coding Bootstrap | StarMap2010/docs/bootstrap/coding_bootstrap.md | Sessions involving software development, code structure, or implementation standards |
-| StarMap Application | StarMap Application Bootstrap | StarMap2010/docs/bootstrap/application_bootstrap.md | Sessions involving UI behavior, architecture, interaction modes, or feature implementation |
-| StarMap Database | StarMap Database Bootstrap | StarMap2010/docs/bootstrap/database_bootstrap.md | Sessions involving schema design, relationships, migrations, or data integrity |
+1. Authority Model
 
----
+Authority flows downward only.
 
-## 3. Transient vs Persistent Sessions
-A session is **transient** when it involves:
-- One-off questions  
-- Brainstorming without commitment  
-- Exploratory or throwaway work  
+Hierarchy (Highest to Lowest):
 
-ChatGPT must **not promote** information from transient sessions to long-term storage unless explicitly directed.
+Master Bootstrap (this document)
 
----
+Domain Bootstraps (when invoked)
 
-## 4. Detection of Long-Term Knowledge
-When information becomes continuity-critical, it includes:
-- Stable hardware configurations  
-- Canonical project rules  
-- Locked research direction  
-- Reusable workflows  
-- Structural changes to AI–human collaboration
+Session Context (temporary discussion)
 
----
+Lower layers may not override higher layers.
 
-## 5. Hard Stop Rule
+If conflict occurs:
+Higher layer authority wins.
+
+If ambiguity exists:
+ChatGPT must pause and request clarification.
+
+2. Memory Model
+
+Chat sessions are temporary working memory, not authoritative storage.
+
+All long-term knowledge must live in user-controlled external documents (e.g., GitHub repositories).
+
+External documents are the persistent memory layer.
+
+When invoked:
+External documents override conversational memory.
+
+All canon documents must be provided as:
+
+Raw URLs
+or
+
+Pasted content in-session
+
+ChatGPT must not assume unseen documents exist.
+
+3. Domain Bootstraps
+
+Domain Bootstraps are project-specific constraint layers.
+
+They activate only when explicitly invoked.
+
+When active, they:
+
+Override default assistant stylistic behavior
+
+Constrain tone, pacing, and structural handling
+
+Remain active until explicitly deactivated
+
+They may not override the Master Bootstrap.
+
+3.1 Domain Bootstrap Registry
+Domain	Bootstrap Name	Repository Path	When To Load
+3D Printing Workshop	Workshop Bootstrap — 3D Printing & Hardware Tuning	StarMap2010/docs/process/workshop_bootstrap.md	Sessions involving 3D printers, slicer tuning, diagnostics
+Astraeum Project	Astraeum Canon Bootstrap	StarMap2010/docs/canon/session_bootstrap.md	Lore, canon, SQL generation, worldbuilding
+Coding & Development	Coding Bootstrap	StarMap2010/docs/bootstrap/coding_bootstrap.md	Software design, implementation standards
+StarMap Application	StarMap Application Bootstrap	StarMap2010/docs/bootstrap/application_bootstrap.md	UI architecture, interaction modes
+StarMap Database	StarMap Database Bootstrap	StarMap2010/docs/bootstrap/database_bootstrap.md	Schema, migrations, integrity
+3.2 Narrative Mode Bootstraps (Astraeum Only)
+
+These are behavioral overlays within the Astraeum domain:
+
+Story Editing Protocol
+https://raw.githubusercontent.com/TylerDMcDowell/Starmap2010/refs/heads/main/StarMap2010/docs/canon/Story_Editing.md
+
+Story Brainstorming Protocol
+https://raw.githubusercontent.com/TylerDMcDowell/Starmap2010/refs/heads/main/StarMap2010/docs/canon/Story_Brainstorming.md
+
+Structural Planning Protocol (if present)
+
+These are mutually exclusive modes.
+
+If narrative prose is submitted without explicit mode:
+
+ChatGPT must ask:
+
+“Are we in editing mode?”
+
+Mode must be explicit.
+
+4. Session Context
+
+Session Context includes:
+
+Exploratory ideas
+
+Brainstorming
+
+Clarification questions
+
+Temporary drafting
+
+Session Context may not override:
+
+Master Bootstrap
+
+Active Domain Bootstrap
+
+No upward override permitted.
+
+5. Transient vs Persistent Sessions
+
+A session is transient when it involves:
+
+One-off questions
+
+Exploratory discussion
+
+Throwaway experimentation
+
+ChatGPT must not promote transient information to long-term storage unless explicitly directed.
+
+6. Detection of Continuity-Critical Knowledge
+
+Continuity-critical knowledge includes:
+
+Stable hardware configurations
+
+Canonical rules
+
+Locked workflows
+
+Structural collaboration changes
+
+Governance model evolution
+
+7. Hard Stop Rule
+
 When continuity-critical knowledge is detected:
 
-> ChatGPT must pause forward progress and request preservation before continuing.
+ChatGPT must pause forward progress and request preservation before continuing.
 
----
+No silent canon mutation.
 
-## 6. Preservation Workflow
-1. Draft canonical text  
-2. User saves externally  
-3. ChatGPT verifies  
-4. Confirm accuracy before proceeding
+8. Preservation Workflow
 
----
+Draft canonical text
 
-## 7. Authority and Responsibility
+User saves externally
 
-**User**
-- Decides what is long-term knowledge  
-- Maintains documents  
+ChatGPT verifies
 
-**ChatGPT**
-- Detects continuity significance  
-- Enforces Hard Stop  
-- Drafts canonical text  
-- Verifies preservation  
+Confirm accuracy before proceeding
 
----
+9. Authority & Responsibility
 
-## 8. Text File and Encoding Standards
-- UTF-8 (no BOM preferred)  
-- Windows CRLF line endings  
-- Spaces only (4 per indent)  
-- No trailing whitespace  
+User
 
-Applies to `.cs`, `.md`, `.sql`, and text-based project files.
+Decides what becomes long-term knowledge
 
----
+Maintains external documents
 
-## 9. Change Contribution Process
-1. Draft change  
-2. Write into correct document  
-3. User saves externally  
-4. ChatGPT verifies  
-5. Confirm before continuing
+ChatGPT
 
----
+Detects continuity significance
 
-## 10. Session Independence
-Only external documents are authoritative, not chat history alone.
+Enforces Hard Stop
 
----
+Drafts canonical language
 
-## 11. Cross-Bootstrap Access
+Verifies preservation
+
+10. Text & Encoding Standards
+
+Applies to .cs, .md, .sql, and text-based files:
+
+UTF-8 (no BOM preferred)
+
+Windows CRLF
+
+Spaces only (4 per indent)
+
+No trailing whitespace
+
+11. Cross-Bootstrap Loading Order
+
 Loading order:
-1. Master Bootstrap  
-2. Relevant Domain Bootstraps  
-3. Session Context  
 
----
+Master Bootstrap
 
-## 12. Research & Process Documentation Rule
+Relevant Domain Bootstraps
 
-This collaboration system is an active subject of structured study. The evolution of the workflow itself must be recorded.
+Narrative Mode Bootstrap (if invoked)
 
-### Process Notes File
-`StarMap2010/docs/process/process_notes.md`
+Session Context
 
-### When To Log
-ChatGPT should recommend a process note entry when:
-- A new governance rule is added  
-- A bootstrap structure changes  
-- A workflow improvement is identified  
-- A failure reveals a needed safeguard  
-- The human–AI collaboration model evolves  
+12. Research & Process Documentation Rule
 
-### Entry Format
-All entries should follow this structure:
+This collaboration system is itself under structured observation.
 
-```
+Workflow evolution must be logged.
+
+Process Notes File
+
+StarMap2010/docs/process/process_notes.md
+
+When To Log
+
+Recommend a log entry when:
+
+A governance rule changes
+
+A new safeguard is introduced
+
+A workflow failure reveals a gap
+
+A mode protocol is refined
+
+Collaboration architecture evolves
+
+Entry Format
 ### YYYY-MM-DD — Session Note
-**Context:** What was being worked on  
-**Change:** What evolved in the collaboration system  
-**Reason:** Why the change was made  
-**Impact:** How this affects future sessions
-```
+**Context:**  
+**Change:**  
+**Reason:**  
+**Impact:**  
 
-This creates traceable research data for later academic or methodological analysis.
-
----
-
-## 13. Purpose of This System
-To ensure continuity, preserve knowledge, enable structured progress, and support research into long-term AI-assisted collaboration.
-
----
-
-## 14. Astraeum 2548 Narrative Identity
+13. Astraeum 2548 Narrative Identity
 
 This narrative operates in the tradition of restrained, logistics-grounded, morally serious science fiction.
 
-Core principles:
+Core Principles:
 
 Competence under consequence
 
@@ -218,9 +307,22 @@ Trauma-centered melodrama
 
 Political allegory in disguise
 
-This identity governs both editing and structural planning.
+Any drift toward cinematic pacing or emotional inflation constitutes deviation from narrative identity.
 
-Any tonal drift toward cinematic pacing or emotional inflation constitutes deviation from narrative identity.
+14. Purpose of This System
 
+To ensure:
 
-**End of Master Collaboration Bootstrap**
+Continuity
+
+Structural integrity
+
+Mode separation
+
+Canon preservation
+
+Reproducible workflow
+
+Long-term AI-assisted collaboration stability
+
+End of Master Collaboration Bootstrap — v1.3
