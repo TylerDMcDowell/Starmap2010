@@ -41,8 +41,8 @@ The campaign is session-based with persistent state stored externally.
 
 ### Player-Facing Files
 
-- `player/character.md`
-- `player/inventory.md`
+- `character.md`
+- `inventory.md`
 - `world/world-state.md`
 - `world/npcs.md`
 - `world/rumors.md`

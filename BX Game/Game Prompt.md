@@ -1,14 +1,15 @@
 GAME SESSION START
 
 Load campaign state:
-[link to README.md]
-[link to character.md]
-[link to inventory.md]
-[link to world-state.md]
-[link to npcs.md]
-[link to rumors.md]
-[link to locations.md]
-[link to last session]
+https://raw.githubusercontent.com/TylerDMcDowell/Starmap2010/refs/heads/main/BX%20Game/README.md
+https://raw.githubusercontent.com/TylerDMcDowell/Starmap2010/refs/heads/main/BX%20Game/character.md
+https://raw.githubusercontent.com/TylerDMcDowell/Starmap2010/refs/heads/main/BX%20Game/inventory.md
+https://raw.githubusercontent.com/TylerDMcDowell/Starmap2010/refs/heads/main/BX%20Game/rules-lite.md
+https://raw.githubusercontent.com/TylerDMcDowell/Starmap2010/refs/heads/main/BX%20Game/world/locations.md
+https://raw.githubusercontent.com/TylerDMcDowell/Starmap2010/refs/heads/main/BX%20Game/world/npcs.md
+https://raw.githubusercontent.com/TylerDMcDowell/Starmap2010/refs/heads/main/BX%20Game/world/rumors.md
+https://raw.githubusercontent.com/TylerDMcDowell/Starmap2010/refs/heads/main/BX%20Game/world/world-state.md
+https://raw.githubusercontent.com/TylerDMcDowell/Starmap2010/refs/heads/main/BX%20Game/sessions/session-001.md
 
 Run BX-inspired system (OSE/BX principles).
 Rulings over rules. No retcon. Consequences persist.
