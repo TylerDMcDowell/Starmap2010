@@ -1,7 +1,6 @@
 # Rules (Lite)
 
 ## System Basis
-
 BX-inspired (OSE principles).
 
 - Rulings over rules
@@ -12,53 +11,38 @@ BX-inspired (OSE principles).
 ---
 
 ## Core Resolution
-
 - d20 roll to resolve uncertain outcomes
 - Add relevant modifiers (ability, situation)
 - Meet or exceed target to succeed
-
-The DM determines targets based on context.
+- The DM determines targets based on context
 
 ---
 
 ## Combat
-
 - Side-based initiative
 - d20 to hit
 - Damage based on weapon or effect
 - Combat is fast and dangerous
 
 ### Key Principles
-
 - Position matters
 - Retreat is valid
 - Not all fights are fair
 - Enemies have morale and may flee
 
----
-
-## Armor Class (AC)
-
+### Armor Class (AC)
 Ascending AC system:
-
 - Unarmored: ~10
 - Armor increases AC
 - Shield adds +1
 
----
-
-## Hit Points (HP)
-
+### Hit Points (HP)
 - Low totals by design
 - Damage is meaningful
 - Healing is limited
 
----
-
-## Saving Throws
-
+### Saving Throws
 Used to resist:
-
 - Death / Poison
 - Wands
 - Paralysis / Stone
@@ -70,7 +54,6 @@ The DM calls for saves as needed.
 ---
 
 ## Time Tracking
-
 Time is tracked during play.
 
 - Exploration turns
@@ -85,7 +68,6 @@ Time affects:
 ---
 
 ## Light & Visibility
-
 - Darkness matters
 - Light sources are limited
 - Running out of light is dangerous
@@ -93,9 +75,7 @@ Time affects:
 ---
 
 ## Encumbrance
-
 Tracked in broad categories:
-
 - Light → fast movement
 - Moderate → normal
 - Heavy → slow, limited
@@ -107,9 +87,7 @@ Excess load affects:
 ---
 
 ## Resources
-
 Tracked and consumed:
-
 - rations
 - water
 - light (torches, oil)
@@ -119,7 +97,6 @@ Resource pressure is part of gameplay.
 ---
 
 ## NPCs
-
 - Act independently
 - Have goals and motivations
 - Use morale checks
@@ -128,7 +105,6 @@ Resource pressure is part of gameplay.
 ---
 
 ## Information
-
 - Player only knows what the character perceives
 - No meta-knowledge
 - No hidden information is assumed
@@ -136,15 +112,22 @@ Resource pressure is part of gameplay.
 ---
 
 ## Consequences
-
 - Actions have lasting impact
 - The world does not reset
 - Ignored problems may worsen
 
 ---
 
+## Emergent Field Procedures
+These are not formal class abilities; they are practical doctrine learned in play.
+
+- Fight on chosen ground whenever possible
+- Spears and reach weapons control space before killing blows are attempted
+- Oil, salt, and disruption markings are reserved for node structures and advanced manifestations
+- Early warning signs matter: wrong echoes, unnaturally smooth stone, the feeling of being watched, carving patterns appearing in worked areas
+- If a site shows two warning signs, work stops and the area is treated as dangerous
+
+---
+
 ## Final Principle
-
-The system supports decisions.
-
-The world responds accordingly.
+The system supports decisions. The world responds accordingly.

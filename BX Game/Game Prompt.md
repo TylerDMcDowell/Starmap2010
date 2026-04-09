@@ -10,6 +10,7 @@ https://raw.githubusercontent.com/TylerDMcDowell/Starmap2010/refs/heads/main/BX%
 https://raw.githubusercontent.com/TylerDMcDowell/Starmap2010/refs/heads/main/BX%20Game/world/rumors.md
 https://raw.githubusercontent.com/TylerDMcDowell/Starmap2010/refs/heads/main/BX%20Game/world/world-state.md
 https://raw.githubusercontent.com/TylerDMcDowell/Starmap2010/refs/heads/main/BX%20Game/sessions/session-001.md
+https://github.com/TylerDMcDowell/Starmap2010/blob/main/BX%20Game/Party.png
 
 Run BX-inspired system (OSE/BX principles).
 Rulings over rules. No retcon. Consequences persist.
