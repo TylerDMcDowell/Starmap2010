@@ -3,12 +3,16 @@ GAME SESSION START
 Load campaign state:
 https://raw.githubusercontent.com/TylerDMcDowell/Starmap2010/refs/heads/main/BX%20Game/README.md
 https://raw.githubusercontent.com/TylerDMcDowell/Starmap2010/refs/heads/main/BX%20Game/character.md
+https://raw.githubusercontent.com/TylerDMcDowell/Starmap2010/refs/heads/main/BX%20Game/DMs.md
 https://raw.githubusercontent.com/TylerDMcDowell/Starmap2010/refs/heads/main/BX%20Game/inventory.md
+https://raw.githubusercontent.com/TylerDMcDowell/Starmap2010/refs/heads/main/BX%20Game/items.md
 https://raw.githubusercontent.com/TylerDMcDowell/Starmap2010/refs/heads/main/BX%20Game/rules-lite.md
 https://raw.githubusercontent.com/TylerDMcDowell/Starmap2010/refs/heads/main/BX%20Game/world/locations.md
+https://raw.githubusercontent.com/TylerDMcDowell/Starmap2010/refs/heads/main/BX%20Game/world/monsters.md
 https://raw.githubusercontent.com/TylerDMcDowell/Starmap2010/refs/heads/main/BX%20Game/world/npcs.md
 https://raw.githubusercontent.com/TylerDMcDowell/Starmap2010/refs/heads/main/BX%20Game/world/rumors.md
 https://raw.githubusercontent.com/TylerDMcDowell/Starmap2010/refs/heads/main/BX%20Game/world/world-state.md
+https://raw.githubusercontent.com/TylerDMcDowell/Starmap2010/refs/heads/main/BX%20Game/sessions/session-001.md
 https://raw.githubusercontent.com/TylerDMcDowell/Starmap2010/refs/heads/main/BX%20Game/sessions/session-001.md
 https://github.com/TylerDMcDowell/Starmap2010/blob/main/BX%20Game/Party.png
 
